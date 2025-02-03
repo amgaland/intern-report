@@ -18,506 +18,255 @@
 	\item Хэрэглэгчийн мэдээлэл устгах үед хамааралтай мэдээллийг устгах
 \end{itemize}
 	
-\subsection{useEffect болон useState ашиглан формын мэдээллийг шаардлагын дагуу авах}
+\subsection{User Management Functions}
 
-Эхний ээлжинд ямар нэгэн загваргүй зөвхөн формын зөв ажиллагаа буюу логик үйлдлүүд дээр анхаарах хэрэгтэй байсан ба хамгийн түрүүнд хийх шаардлагатай зүйл нь аймаг сумдын датаг next.js дээрээ үүсгэсэн api-аасаа авч дэлгэцэнд харуулах байсан юм. 
+Энэхүү хэсэгт хэрэглэгчийн мэдээллийг удирдах хэд хэдэн функцийг оруулсан болно. Үүнд хэрэглэгчийн мэдээллийг авах, шинэчлэх, устгах, болон логины ID-г шалгах үйлдлүүд орно.
 
-\begin{lstlisting}[language=Javascript, caption=Next.js дээр бичсэн серверээс датагаа татаж авах, frame=single]
-const fetchData = (url) => {
-  return axios
-    .get(`http://localhost:3000/api/${url}`)
-    .then((res) => {
-      const results = res.data;
-      return results;
-    })
-    .catch((err) => {
-      console.error(err);
-    });
-};
-\end{lstlisting}
-
-Доор харагдаж буй хэсэгт компонентийн логик үйлдлүүд харагдаж байна. useForm() hook ашиглаж select-н утга өөрчлөгдсөн эсэхийг барьж авах, functional component ашиглан state дотор хэрэглэгчийн сонгосон аймаг, сум, хороог хадгална. 
-
-\begin{lstlisting}[language=Javascript, caption=Component-н үндсэн логик үйлдлүүд, frame=single]
-export default function Home() {
-  const [values, handleChange] = useForm();
-  const [data, setData] = useState({
-    cities: [],
-    districts: [],
-    wards: [],
-  });
-
-  useEffect(() => {
-    fetchData(`cities`)
-      .then((res) => {
-        setData({ ...data, cities: res });
-      })
-      .catch((err) => {
-        console.error(err);
-      });
-  }, []);
-
-  const register = (e) => {
-    e.preventDefault();
-    console.log(values);
-  };
-
-  const handleSelect = (id, type) => {
-    if (type == "city") {
-      fetchData(`cities/${id}`)
-        .then((res) => {
-          setData({ ...data, districts: res, wards: [] }); //set districts and clear wards data
-        })
-        .catch((err) => {
-          console.error(err);
-        });
-    } else if (type == "district") {
-      //get wards
-      fetchData(`cities/${values.city}/${id}`)
-        .then((res) => {
-          setData({ ...data, wards: res });
-        })
-        .catch((err) => {
-          console.error(err);
-        });
-    }
-  };
-  
-  ...
-\end{lstlisting}
-
-State дотор хэрэглэгчийн сонгосон мэдээллийг зөвөөр хадгалах шаардлагатай байсан. Эхний байдлаар доор харагдаж байгаагаар хадгалсан ч үүссэн асуудлууд нь замбаараагүй, эцэг сонголтыг сонгоход хүү сонголтуудыг цэвэрлэхэд төвөгтэй байв.
-
-\begin{lstlisting}[language=Javascript, caption=Дотоод төлвийн эхний хувилбар, frame=single]
-	const [cities, setCities] = useState([]);
-  const [districts, setDistricts] = useState([]);
-  const [wards, setWards] = useState([]);
-  const [selectedCity, setSelectedCity] = useState();
-  const [selectedDistrict, setSelectedDistrict] = useState();
-  const [selectedWard, setSelectedWard] = useState();
-\end{lstlisting}
-
-Иймд state-ээ дараах байдлаар хадгаллаа.
-
-\begin{lstlisting}[language=Javascript, caption=Дотоод төлвийн сайжруулсан хувилбар, frame=single]
-	const [data, setData] = useState({
-    cities: [],
-    districts: [],
-    wards: [],
-  });
-\end{lstlisting}
-
-Эхний шаардлагын дагуу формыг хэрэгжүүлсний дараах вэб дээр харагдах байдал
-
-\begin{figure}
-	\centering
-	\includegraphics[width=15cm]{images/form-v1.png}
-	\caption{Формын эхний хувилбар}
-	\label{fig:my_label_1}
-\end{figure}
-
-\pagebreak
-\subsection{useState-н оронд useReducer hook ашиглах}
-
-useReducer нь useState hook-н өөр нэг хувилбар бөгөөд өөр дээрээ state болон action гэсэн параметрүүдийг хүлээн авдаг. State нь өгөгдөл хадгалах бол action нь тухайн state дээр ямар үйлдлүүдийг хийх шаардлагатайг хүлээж авдаг. 
-
-Хамгийн түрүүнд Action-ынхаа төрлүүдийг зарлана.
-
-\begin{lstlisting}[language=Javascript, caption=Хийх үйлдлүүдийн төрлийг зарлах, frame=single]
-	const SET_CITY = "city";
-	const SET_DISTRICT = "district";
-	const SET_WARD = "ward";
-\end{lstlisting}
-
-Үүний дараа хийх үйлдлүүдээ switch case дотор тодорхойлно. Switch case ашигласнаар олон дахин функц зарлах шаардлагагүйгээр Action-н төрлөөс хамаарч тухайн үйлдлийг ажиллуулна. 
-
-\begin{lstlisting}[language=Javascript, caption=Хийх үйлдлүүдийг тодорхойлох, frame=single]
-	const reducer = (state, action) => {
-  switch (action.type) {
-    case SET_CITY:
-      return {
-        city: action.index,
-        district: null,
-        ward: null,
-      };
-    case SET_DISTRICT:
-      return {
-        ...state,
-        district: action.index,
-        ward: null,
-      };
-    case SET_WARD:
-      return {
-        ...state,
-        ward: action.index,
-      };
-    default:
-      return state;
-  }
-};
-\end{lstlisting}
-
-useReducer ашигласнаар өгсөн шаардлагуудын нэг болох эцэг сонголтыг солиход хүү сонголтууд хоосрох ёстой гэснийг маш хялбар байдлаар шийдэх боломжтой болов. Ердөө тухайн сонголтын доор байгаа state-үүдийн утгыг анхны утгаар солисон.
-
-\begin{lstlisting}[language=Javascript, caption=Хүү сонголтуудыг цэвэрлэх, frame=single]
-	...
-    case SET_DISTRICT:
-      return {
-        ...state,
-        district: action.index,
-        ward: null,
-      };
-  ...
-\end{lstlisting}
-
-Одоо форм дээрээ React-Select санг ашиглаж компонент доторх кодоо бичих шаардлагатай. Энэ хэсэг нь DOM дээр рендерлэгдэнэ. 
-
-\begin{lstlisting}[language=Javascript, caption=React-Select ашигласан байдал, frame=single]
-	...  
-	<form className={styles.grid} onSubmit={register}>
-		<label>
-			<p>Country:</p>
-			<Select
-				value={address.map((i, index) => ({ ...i, index }))[state.city]}
-				onChange={(e) => handleChange(e.index, SET_CITY)}
-				options={address.map((i, index) => ({ ...i, index }))}
-				getOptionLabel={(option) => option.name}
-				getOptionValue={(option) => option.index}
-				placeholder="Choose country"
-			/>
-		</label>
-  ...
-\end{lstlisting}
-\pagebreak
-
-React-Select болон Material-UI ашигласны дараа формын маань харагдах байдал. Удирдагчийн өгсөн шаардлагуудын дагуу амжилттай хөгжүүлж дууслаа.
-\begin{figure}
-	\centering
-	\includegraphics[width=15cm]{images/form.png}
-	\caption{Формын эцсийн байдлаар харагдаж буй байдал}
-	\label{fig:my_label_2}
-\end{figure}
-\pagebreak
-
-\section{Toast компонент}
-
-Уг компонентийн гол үүрэг нь Мерчант төсөл дээр ашиглаж буй бүх хүсэлтүүдийн хариуг хэрэглэгч дээр харуулах үүрэгтэй. Мөн хөгжүүлж дууссаны дараа хэрэглэгчийн интерфэйсийн автоматжуулсан тест хийж байж production дээр орох боломжтой.
-
-Сурах ур чадвар: 
-\begin{itemize}
-    \item State management-н гол ойлголт болох Context-н талаар мэдлэгтэй болно
-    \item Өөрийн шаардлагад нийцсэн custom hook бичиж сурах
-    \item Хэрхэн бичсэн компонент дээрээ UI автоматжуулсан тест бичих мэдлэг
-\end{itemize}
-
-Формын шаардлага: 
-\begin{itemize}
-    \item Material-UI-н Snackbar ашиглах
-    \item Олон Toast зэрэг гаргадаг байх
-    \item Toast нь үүсгэх, цэвэрлэх, устгах үйлдлүүдтэй байх
-    \item Toast-н цаг дуусахад автоматаар цэвэрлэдэг байх
-    \item UI автоматжуулсан тестийг давсан байх
-\end{itemize}
-
-\subsection{Context үүсгэх}
-
-React-н өгөгдлийн урсгал нэг чиглэлд буюу зөвхөн эцгээс хүү компонент рүү утга дамжуулах чадвартай байдаг. Иймд нэг state-ээ нэгэндээ хамааралгүй олон өөр газарт ашиглагдаж байгаа компонентод ашиглахын тулд маш замбаараагүй дамжуулалт хийх шаардлага гардаг. Харин үүний нэг шийдэл нь Context гэх ойлголт бөгөөд бусад програмчлалын хэл дээр байдаг Global хувьсагч шиг ашиглах боломжтой. 
-
-Хамгийн эхлээд context-оо үүсгэж, түүний хийх үйлдлүүдийг зарлаж өгөх хэрэгтэй. Өмнөх хэрэгжүүлэлт дээр ашигласан useReducer-н мэдлэг хэрэг болов.
-
-\begin{lstlisting}[language=Javascript, caption=Context үүсгэх, frame=single]
-	...  
-	export const ACTION_TOAST = "TOAST";
-	export const ACTION_RESET = "RESET";
-	export const ACTION_CLEAR = "CLEAR";
-
-	export const INITIAL_STATE: { toasts: ToastType[] } = {
-		toasts: [],
-	};
-
-	type Actions =
-		| (ActionType<typeof ACTION_TOAST> & { toast: ToastType })
-		| ActionType<typeof ACTION_RESET>
-		| (ActionType<typeof ACTION_CLEAR> & { id: string });
-
-	export const ToastContext = createContext(null);
-	ToastContext.displayName = "ToastContext";
-	export const ToastControlContext = createContext(null);
-	ToastControlContext.displayName = "ToastControlContext";
-  ...
-\end{lstlisting}
-
-Toast-н анхны утгыг зарласан байдал 
-
-\begin{lstlisting}[language=Javascript, caption=Toast context-н анхны утгыг зарласан байдал, frame=single]
-	...  
-	export const INITIAL_STATE: { toasts: ToastType[] } = {
-		toasts: [],
-	};
-  ...
-\end{lstlisting}
-
-Мөн манайх төсөл дээрээ Typescript ашигладаг тул мэдээж Toast-н интерфэйсийг зааж өгөх хэрэгтэй. Ингэснээр Toast ашиглаж буй хөгжүүлэгч тухайн компонент ямар төрөлтэй ямар props-уудыг хүлээн авах шаардлагатайг хялбараар харах боломжтой. Мөн хөгжүүлэлтийн явцад гарах алдаа багасна.
-
-\begin{lstlisting}[language=Javascript, caption=Toast-н интерфэйс тодорхойлох, frame=single]
-	...  
-	export interface ToastType {
-		id?: string;
-		message: string;
-		type: "success" | "info" | "warning" | "error";
-		duration?: number;
+\begin{lstlisting}[language=Go, caption=Get all users function, frame=single]
+func GetAllUsers(r *http.Request) ([]models.User, error) {
+	var users []models.User
+	if err := config.DB.Find(&users).Error; err != nil {
+		log.Error("Failed to fetch users", map[string]interface{}{"error": err.Error()}, r)
+		return nil, err
 	}
-  ...
+	return users, nil
+}
 \end{lstlisting}
 
-Одоо шаардлагын дагуу Toast үүсгэх, цэвэрлэх, устгах үйлдэл хийх функцын кодыг бичсэн
+Энэ функц нь бүх хэрэглэгчдийн мэдээллийг өгөгдлийн сангаас авч, ямар нэгэн алдаа гарсан тохиолдолд тухайн алдааг логлош болно.
 
-\begin{lstlisting}[language=Javascript, caption=Toast үүсгэх функц, frame=single]
-	...  
-	function toast(state: typeof INITIAL_STATE, toast: ToastType): typeof state {
-		return {
-			...state,
-			toasts: [...state.toasts, toast],
-		};
+\begin{lstlisting}[language=Go, caption=Create user function, frame=single]
+func CreateUser(user models.User, r *http.Request) (models.User, error) {
+	existingUser := config.DB.Where("login_id = ?", user.LoginID).First(&models.User{})
+	if existingUser.RowsAffected > 0 {
+		return models.User{}, errors.New("user already exists")
 	}
-  ...
-\end{lstlisting}
 
-\begin{lstlisting}[language=Javascript, caption=Toast-г context-оос цэвэрлэх, frame=single]
-	...  
-	function clear(state: typeof INITIAL_STATE, toastId: string): typeof state {
-		return {
-			...state,
-			toasts: state.toasts.filter((toast) => toast.id !== toastId),
-		};
+	hashedPassword, err := utils.HashPassword(user.Password)
+	if err != nil {
+		return models.User{}, err
 	}
-  ...
-\end{lstlisting}
 
-Олон Toast зэрэг гарах боломжтой тул үүсгэсэн Toast бүр дээрээ uniq ID үүсгэж, түүний дараа тухайн ID-аар нь хайж олон цэвэрлэх боломжтой болно. 
+	user.Password = hashedPassword
 
-\begin{lstlisting}[language=Javascript, caption=Uniq ID гаргах, frame=single]
-	...  
-	function generateToastId() {
-		return Math.random().toString(36).substr(2, 9);
+	if err := config.DB.Create(&user).Error; err != nil {
+		return models.User{}, err
 	}
-  ...
+	return user, nil
+}
 \end{lstlisting}
 
-Тухайн үйлдлийг дуудахад дээр тодорхойлж өгсөн тус тусын үүрэгтэй функцууд ажиллана. Бүх Toast-г context дотроосоо устгахдаа case дээр анхны зарласан хоосон массивыг буцааж оноож байгаа. 
+Шинэ хэрэглэгчийг үүсгэх үед, хэрэглэгчийн ID өмнө нь байгаа эсэхийг шалгаад, байсан бол алдаа буцаана. Мөн хэрэглэгчийн нууц үгийг хуулаад өгөгдлийн сан дээр хадгална.
 
-\begin{lstlisting}[language=Javascript, caption=useReducer дээр ажиллах үйлдлүүдийг заах, frame=single]
-	...  
-	function reducer(state = INITIAL_STATE, action: Actions): typeof state {
-		switch (action.type) {
-			case ACTION_TOAST:
-				return toast(state, action.toast);
-			case ACTION_RESET:
-				return INITIAL_STATE;
-			case ACTION_CLEAR:
-				return clear(state, action.id);
-			default:
-				return state;
+\begin{lstlisting}[language=Go, caption=Update user function, frame=single]
+func UpdateUser(id string, user models.User, r *http.Request) (models.User, error) {
+	hashedPassword, err := utils.HashPassword(user.Password)
+	if err != nil {
+		return models.User{}, err
+	}
+
+	user.Password = hashedPassword
+	if err := config.DB.Model(user).Where("id = ?", id).Updates(user).Error; err != nil {
+		return models.User{}, err
+	}
+	return user, nil
+}
+\end{lstlisting}
+
+Энэ функц нь хэрэглэгчийн мэдээллийг шинэчилж, нууц үгийг шинэчлэх шаардлагатай бол шинэчилнэ.
+
+\begin{lstlisting}[language=Go, caption=Delete user function, frame=single]
+func DeleteUser(id string, r *http.Request) error {
+	if err := config.DB.Where("user_id = ?", id).Delete(&models.UserRole{}).Error; err != nil {
+		return err
+	}
+
+	if err := config.DB.Where("id = ?", id).Delete(&models.User{}).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+\end{lstlisting}
+
+Хэрэглэгчийг устгах үед түүний хэрэглэгчийн үүрэг болон хэрэглэгчийн мэдээллийг устгана.
+
+\begin{lstlisting}[language=Go, caption=Get user by ID function, frame=single]
+func GetUserByID(id string, r *http.Request) (*models.User, error) {
+	log.Info("Fetching user by ID from the database", map[string]interface{}{"id": id}, r)
+
+	var user models.User
+
+	err := config.DB.Where("id = ?", id).First(&user).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Warn("User not found", map[string]interface{}{"id": id}, r)
+			return nil, nil
 		}
+		log.Error("Database query error", map[string]interface{}{"error": err.Error()}, r)
+		return nil, err
 	}
-  ...
+
+	log.Info("User fetched successfully", map[string]interface{}{"id": id}, r)
+	return &user, nil
+}
 \end{lstlisting}
 
-\subsection{Custom Hook бичих}
+Энэхүү функц нь хэрэглэгчийн ID-г ашиглан мэдээллийг өгөгдлийн сангаас авдаг. Хэрэв хэрэглэгч олдвол түүний мэдээллийг буцаана.
 
-Hook бичиж өгснөөр Toast-г бүрэн ашиглах нөхцөл нь бүрдэнэ. useToast() болон useToastControl() гэсэн хоёр төрлийн hook бичиж өгсөн. 
+\begin{lstlisting}[language=Go, caption=Check if login ID exists function, frame=single]
+func CheckLoginIDExists(loginID string, r *http.Request) (bool, error) {
+	var user models.User
+	result := config.DB.Where("login_id = ?", loginID).First(&user)
 
-Тухайн context-г төсөл дотор буюу index.jsx файлд wrap хийж өгөөгүй нөхцөлд console дээр ашиглах боломжгүй гэсэн алдааг гаргаж өгөх шаардлагатай.
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
+		log.Error("Failed to check login_id", map[string]interface{}{"error": result.Error.Error()}, r)
+		return false, result.Error 
+	}
 
-\begin{lstlisting}[language=Javascript, caption=Context-г буруу ашигласан үед алдаа гаргах, frame=single]
-	...  
-	export function useToastControl() {
-		const dispatch = useContext(ToastControlContext);
-		if (!dispatch) throw new TypeError("Please use within ToastProvider");
-
-		const reset = useCallback(() => dispatch({ type: ACTION_RESET }), [dispatch]);
-  ...
+	return true, nil 
+}
 \end{lstlisting}
 
-Toast-г шинээр үүсгэх шаардлагатай үед уг код ажиллана. Хэрэв Toast-оо үүсгэхдээ дэлгэцэнд харагдах цагийг зааж өгөөгүй бол автоматаар 4000 ms-н дараа тухайн Toast санах ой болон хэрэглэгч дээр харагдах хэсгээс цэвэрлэгдэнэ.
-
-\begin{lstlisting}[language=Javascript, caption=Toast үүсгэх үүрэгтэй hook, frame=single]
-	...  
-	const toast = useCallback(
-    (toast: ToastType) => {
-      const toastId = generateToastId();
-
-      dispatch({ toast: { ...toast, id: toastId }, type: ACTION_TOAST });
-
-      setTimeout(() => {
-        dispatch({ id: toastId, type: ACTION_CLEAR });
-      }, toast.duration || 4000);
-    },
-    [dispatch]
-  );
-  ...
-\end{lstlisting}
-
-Үүний дараа Toast компонентийнхоо интерфэйсийг Material-UI сан ашиглаж шийдэв.
-
-
-\begin{lstlisting}[language=Javascript, caption=Material-UI ашиглаж интерфэйсийг үүсгэх, frame=single]
-	...  
-	return (
-		<Snackbar
-			anchorOrigin={{ horizontal: "center", vertical: "bottom" }}
-			open={open}
-			autoHideDuration={duration}
-			onClose={onClose}
-			action={action}
-		>
-			<Alert onClose={onClose} severity={type} sx={{ width: "100%" }}>
-				{message}
-			</Alert>
-		</Snackbar>
-	);
-  ...
-\end{lstlisting}
-
-Hook бичихгүйгээр шийдэх нь Toast-г ашиглахын тулд бүтэн компонент код бичих асуудалтай байсан ба custom hook-р шийдсэнээр хөгжүүлэгч ердөө ганц функцийг л дуудаж ажиллуулахад хангалттай. Ингэснээр хөгжүүлэлтийн хурданд ч эерэгээр нөлөөлнө. 
-
-\begin{lstlisting}[language=Javascript, caption=Toast-г дуудаж ашиглаж буй байдал, frame=single]
-	...  
-	.then(
-        (res) =>
-          res.data &&
-          toast({
-            message: "Created product",
-            type: "success",
-          })
-      )
-  ...
-\end{lstlisting}
+Энэ функц нь өгөгдлийн сан дээрх login ID-гийн байршлыг шалгадаг. Хэрэв байвал true, байхгүй бол false буцаана.
 \pagebreak
 
-\section{UI автоматжуулсан тест}
 
-Бичсэн компонентдоо тест код бичсэнээр ажиллагааг нь баталгаажуулах, алдааг илрүүлэх, хүнээр тест хийлгүүлэх шаардлагагүй болдог. Тестээ бичихдээ React багийн гишүүн Kent C. Dodds-н Jest сан дээр нэмэлт хөгжүүлэлт хийж гаргасан React Testing Library ашиглав.
 
-Хуурамч цаг ашиглаж, тест хийх stage-н хурдыг нэмэгдүүлнэ. Ингэснээр заавал Toast дээр тавигдсан 4 секундыг хүлээх хэрэггүй.
 
-\begin{lstlisting}[language=Javascript, caption=FakeTimer ашиглах, frame=single]
-	...  
-	jest.useFakeTimers();
-  ...
+\section{Golang Test хэрэгжүүлэлт}
+
+Энэхүү хэсэгт бид Go хэл дээрх үйлдлүүдийг тест хийх зориулалттай функцуудыг хэрэгжүүлсэн болно. Тестүүд нь хэрэглэгчийн мэдээллийг нэмэх, авах, шинэчлэх, устгах зэрэг CRUD үйлдлүүдийг шалгана.
+
+\subsection{Тестийн орчин}
+
+Тестийн орчин байгуулахдаа өгөгдлийн санг анхны нөхцөлд нь оруулж, дараа нь алдаагүйгээр бүх функцуудыг туршина. Энэ зорилгоор дараах функцүүдийг ашиглав:
+
+\begin{lstlisting}[language=Go, caption=Test Database Setup, frame=single]
+func setupTestDB() *gorm.DB {
+    test.ConnectTestDatabase()
+    config.DB.Exec("TRUNCATE TABLE users RESTART IDENTITY CASCADE") 
+    return config.DB
+}
 \end{lstlisting}
 
-Хамгийн эхэнд хийгдэх тест бол DOM дээр зурагдаж байгаа эсэх, явуулсан string-г хэвлэж байгаа эсэх болон "ХААХ" товчлуур дээр дарагдахад цэвэрлэгдэж байгаа эсэхийг шалгах юм.
+Энэхүү функц нь тестийн өгөгдлийн санг тохируулж, хэрэглэгчийн хүснэгтийг шинэчилнэ.
 
-\begin{lstlisting}[language=Javascript, caption=Toast компонентийг DOM дээр зурна, frame=single]
-	...  
-	const message = "Hello, it's toast";
-  render(<Toast message={message} type="success" />);
-  ...
-\end{lstlisting}
+\subsection{Тестийн функцууд}
 
-\begin{lstlisting}[language=Javascript, caption=DOM дээр зурагдсан эсэхийг шалгана, frame=single]
-	...  
-	expect(screen.getByText(message)).toBeInTheDocument();
-  ...
-\end{lstlisting}
-
-\begin{lstlisting}[language=Javascript, caption=Хаах товчлуур дээр дарахад устсан эсэхийг шалгах, frame=single]
-	...  
-	userEvent.click(
-    screen.getByRole("button", {
-      name: /close/i,
-    })
-  );
-
-  await waitForElementToBeRemoved(() => screen.getByText(message));
-
-  expect(screen.queryByText(message)).not.toBeInTheDocument();
-  ...
-\end{lstlisting}
-
-Үүний дараачаар компонентийг хоёр удаа дуудаж ажиллуулаад интерфэйс дээр харагдах нийт хугацааг өөр өөрөөр зааж өгнө. Хөгжүүлэгч дурын хугацаа зааж өгсөн үед уг хугацааны үед ажиллаж байгаа эсэхийг шалгана.
-
-\begin{lstlisting}[language=Javascript, caption=Олон Toast зэрэг гаргаж дурын хугацааг зааж өгөх, frame=single]
-	...  
-	test("duration", async () => {
-    const cssAnimation = 300;
-    const toasts = [
-      {
-        duration: 4000,
-        message: "Toast 1",
-      },
-      {
-        duration: 5000,
-        message: "Toast 2",
-      },
-  ];
-
-  toasts.forEach((toast) =>
-      render(
-        <Toast
-          message={toast.message}
-          type="success"
-          duration={toast.duration}
-        />
-      )
-  );
-  ...
-\end{lstlisting}
-
-\begin{lstlisting}[language=Javascript, caption=Зааж өгсөн хугацааны дараа цэвэрлэгдэж байгаа эсэхийг шалгах, frame=single]
-	...  
-	expect(screen.getByText("Toast 1")).toBeInTheDocument();
-    await waitForElementToBeRemoved(() => screen.getByText("Toast 1"), {
-      timeout: toasts[0].duration + cssAnimation,
-    });
-  expect(screen.queryByText("Toast 1")).not.toBeInTheDocument();
-  ...
-\end{lstlisting}
-
-Хамгийн сүүлд нь миний бичсэн Toast дөрвөн өөр төрлийг хүлээж аваад тухайн төрлөөс нь хамаарч өөр загвартай харуулдаг тул уг төрлийн дагуу зурагдаж байгаа эсэхийг шалгах юм. 
-
-Toast-н хүлээж авах type-н жагсаалт:
 \begin{itemize}
-	\item success
-	\item info
-	\item warning
-	\item error
+    \item \texttt{TestCreateUser}: Шинэ хэрэглэгч үүсгэх үйлдлийг шалгана.
+    \item \texttt{TestGetAllUsers}: Бүх хэрэглэгчийн мэдээллийг авах функцыг туршина.
+    \item \texttt{TestUpdateUser}: Хэрэглэгчийн мэдээллийг шинэчлэх үйлдлийг шалгана.
+    \item \texttt{TestDeleteUser}: Хэрэглэгчийн мэдээллийг устгах үйлдлийг туршина.
+    \item \texttt{TestGetUserByID}: Хэрэглэгчийн ID-ээр мэдээлэл авах үйлдлийг шалгана.
 \end{itemize}
 
-\begin{lstlisting}[language=Javascript, caption=Өгсөн type-н дагуу зурагдаж байгаа эсэхийг шалгах, frame=single]
-	...  
-	test("check type", () => {
-    const types = [
-      {
-        class: "filledSuccess",
-        message: "Success toast",
-        type: "success",
-      },
-      { class: "filledError", message: "Error toast", type: "error" },
-      { class: "filledInfo", message: "Info toast", type: "info" },
-      {
-        class: "filledWarning",
-        message: "Warning toast",
-        type: "warning",
-      },
-    ];
+\subsubsection{TestCreateUser}
 
-  types.forEach((opt) => {
-    const { container } = render(
-      <Toast
-        message={opt.message}
-        type={opt.type as "success" | "info" | "warning" | "error"}
-      />
-    );
-    const alert = container.firstChild;
+Энэхүү тест нь шинэ хэрэглэгчийг үүсгэж, үүсгэх үед гарах алдааг шалгах бөгөөд хэрэглэгчийн нууц үгийг хашлах явцыг шалгана.
 
-    expect(alert.firstChild).toHaveClass(`MuiAlert-${opt.class}`);
-    cleanup();
-    });
-  });
-  ...
+\begin{lstlisting}[language=Go, caption=Test Create User Function, frame=single]
+func TestCreateUser(t *testing.T) {
+    db := setupTestDB()
+    defer test.CloseTestDatabase()
+
+    loginID := "johndoe"
+    dropExistingUser(db, loginID)
+
+    r := httptest.NewRequest(http.MethodPost, "/", nil)
+    user := createSampleUser(loginID)
+
+    createdUser, err := services.CreateUser(user, r)
+
+    assert.NoError(t, err, "Error creating user")
+    assert.NotZero(t, createdUser.ID, "User ID should not be zero")
+    assert.NotEqual(t, "password123", createdUser.Password, "Password should be hashed")
+
+    var fetchedUser models.User
+    err = db.First(&fetchedUser, "id = ?", createdUser.ID).Error
+    assert.NoError(t, err, "Error fetching user")
+
+    assert.Equal(t, "John", fetchedUser.FirstName, "First name mismatch")
+    assert.Equal(t, "Doe", fetchedUser.LastName, "Last name mismatch")
+    assert.NotEqual(t, "password123", fetchedUser.Password, "Password should be hashed")
+}
 \end{lstlisting}
 
+\subsubsection{TestGetAllUsers}
+
+Энэхүү тест нь өгөгдлийн сан дахь бүх хэрэглэгчийн мэдээллийг авах үйлдлийг шалгана. Мөн хэрэглэгчдийн тоог болон мэдээллийг баталгаажуулна.
+
+\begin{lstlisting}[language=Go, caption=Test Get All Users Function, frame=single]
+func TestGetAllUsers(t *testing.T) {
+    db := setupTestDB()
+    defer test.CloseTestDatabase()
+
+    db.Exec("TRUNCATE TABLE users RESTART IDENTITY CASCADE")
+
+    users := []models.User{
+        {FirstName: "John", LastName: "Doe"},
+        {FirstName: "Jane", LastName: "Smith"},
+    }
+    for _, user := range users {
+        db.Create(&user)
+    }
+
+    r := httptest.NewRequest(http.MethodGet, "/users", nil)
+    allUsers, err := services.GetAllUsers(r)
+
+    assert.NoError(t, err, "Error fetching all users")
+    assert.Len(t, allUsers, len(users), "Unexpected number of users fetched")
+
+    for i, fetchedUser := range allUsers {
+        assert.True(t, i < len(users), "Index %d out of range for expected users", i)
+        assert.Equal(t, users[i].FirstName, fetchedUser.FirstName, 
+            "First name mismatch. Expected: %s, Got: %s", users[i].FirstName, fetchedUser.FirstName)
+        assert.Equal(t, users[i].LastName, fetchedUser.LastName, 
+            "Last name mismatch. Expected: %s, Got: %s", users[i].LastName, fetchedUser.LastName)
+    }
+}
+\end{lstlisting}
+
+\subsubsection{TestUpdateUser}
+
+Энэхүү тест нь хэрэглэгчийн мэдээллийг шинэчлэх үйлдлийг шалгадаг.
+
+\begin{lstlisting}[language=Go, caption=Test Update User Function, frame=single]
+func TestUpdateUser(t *testing.T) {
+    db := setupTestDB()
+    defer test.CloseTestDatabase()
+
+    // Create sample user
+    originalUser := createSampleUser("johndoe")
+    db.Create(&originalUser)
+
+    // Prepare updated user data
+    updatedUserData := models.User{
+        FirstName: "Jane",
+        LastName:  "Smith",
+        Password:  "newpassword123",
+    }
+
+    r := httptest.NewRequest(http.MethodPut, "/user", nil)
+    updatedUser, err := services.UpdateUser(originalUser.ID, updatedUserData, r)
+
+    assert.NoError(t, err, "Error updating user")
+    assert.Equal(t, updatedUserData.FirstName, updatedUser.FirstName, "First name mismatch")
+    assert.Equal(t, updatedUserData.LastName, updatedUser.LastName, "Last name mismatch")
+    assert.NotEqual(t, "newpassword123", updatedUser.Password, "Password should be hashed")
+
+    var fetchedUser models.User
+    err = db.First(&fetchedUser, "id = ?", originalUser.ID).Error
+    assert.NoError(t, err, "Error fetching updated user")
+
+    assert.Equal(t, updatedUserData.FirstName, fetchedUser.FirstName, "First name mismatch in database")
+    assert.Equal(t, updatedUserData.LastName, fetchedUser.LastName, "Last name mismatch in database")
+    assert.NotEqual(t, "newpassword123", fetchedUser.Password, "Password should be hashed in database")
+}
+\end{lstlisting}
 
 
