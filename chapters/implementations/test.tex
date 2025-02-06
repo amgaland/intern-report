@@ -1,0 +1,134 @@
+\section{Golang Test хэрэгжүүлэлт}
+
+Энэхүү хэсэгт бид Go хэл дээрх үйлдлүүдийг тест хийх зориулалттай функцуудыг хэрэгжүүлсэн болно. Тестүүд нь хэрэглэгчийн мэдээллийг нэмэх, авах, шинэчлэх, устгах зэрэг CRUD үйлдлүүдийг шалгана.
+
+
+
+\subsection{Тестийн орчин}
+
+Тестийн орчин байгуулахдаа өгөгдлийн санг анхны нөхцөлд нь оруулж, дараа нь алдаагүйгээр бүх функцуудыг туршина. Энэ зорилгоор дараах функцүүдийг ашиглав:
+
+\begin{lstlisting}[language=Go, caption=Test Database Setup, frame=single]
+func setupTestDB() *gorm.DB {
+    test.ConnectTestDatabase()
+    config.DB.Exec("TRUNCATE TABLE users RESTART IDENTITY CASCADE") 
+    return config.DB
+}
+\end{lstlisting}
+
+Энэхүү функц нь тестийн өгөгдлийн санг тохируулж, хэрэглэгчийн хүснэгтийг шинэчилнэ.
+
+\subsection{Тестийн функцууд}
+
+\begin{itemize}
+    \item \texttt{TestCreateUser}: Шинэ хэрэглэгч үүсгэх үйлдлийг шалгана.
+    \item \texttt{TestGetAllUsers}: Бүх хэрэглэгчийн мэдээллийг авах функцыг туршина.
+    \item \texttt{TestUpdateUser}: Хэрэглэгчийн мэдээллийг шинэчлэх үйлдлийг шалгана.
+    \item \texttt{TestDeleteUser}: Хэрэглэгчийн мэдээллийг устгах үйлдлийг туршина.
+    \item \texttt{TestGetUserByID}: Хэрэглэгчийн ID-ээр мэдээлэл авах үйлдлийг шалгана.
+\end{itemize}
+
+\subsubsection{TestCreateUser}
+
+Энэхүү тест нь шинэ хэрэглэгчийг үүсгэж, үүсгэх үед гарах алдааг шалгах бөгөөд хэрэглэгчийн нууц үгийг хашлах явцыг шалгана.
+
+\begin{lstlisting}[language=Go, caption=Test Create User Function, frame=single]
+func TestCreateUser(t *testing.T) {
+    db := setupTestDB()
+    defer test.CloseTestDatabase()
+
+    loginID := "johndoe"
+    dropExistingUser(db, loginID)
+
+    r := httptest.NewRequest(http.MethodPost, "/", nil)
+    user := createSampleUser(loginID)
+
+    createdUser, err := services.CreateUser(user, r)
+
+    assert.NoError(t, err, "Error creating user")
+    assert.NotZero(t, createdUser.ID, "User ID should not be zero")
+    assert.NotEqual(t, "password123", createdUser.Password, "Password should be hashed")
+
+    var fetchedUser models.User
+    err = db.First(&fetchedUser, "id = ?", createdUser.ID).Error
+    assert.NoError(t, err, "Error fetching user")
+
+    assert.Equal(t, "John", fetchedUser.FirstName, "First name mismatch")
+    assert.Equal(t, "Doe", fetchedUser.LastName, "Last name mismatch")
+    assert.NotEqual(t, "password123", fetchedUser.Password, "Password should be hashed")
+}
+\end{lstlisting}
+
+\subsubsection{TestGetAllUsers}
+
+Энэхүү тест нь өгөгдлийн сан дахь бүх хэрэглэгчийн мэдээллийг авах үйлдлийг шалгана. Мөн хэрэглэгчдийн тоог болон мэдээллийг баталгаажуулна.
+
+\begin{lstlisting}[language=Go, caption=Test Get All Users Function, frame=single]
+func TestGetAllUsers(t *testing.T) {
+    db := setupTestDB()
+    defer test.CloseTestDatabase()
+
+    db.Exec("TRUNCATE TABLE users RESTART IDENTITY CASCADE")
+
+    users := []models.User{
+        {FirstName: "John", LastName: "Doe"},
+        {FirstName: "Jane", LastName: "Smith"},
+    }
+    for _, user := range users {
+        db.Create(&user)
+    }
+
+    r := httptest.NewRequest(http.MethodGet, "/users", nil)
+    allUsers, err := services.GetAllUsers(r)
+
+    assert.NoError(t, err, "Error fetching all users")
+    assert.Len(t, allUsers, len(users), "Unexpected number of users fetched")
+
+    for i, fetchedUser := range allUsers {
+        assert.True(t, i < len(users), "Index %d out of range for expected users", i)
+        assert.Equal(t, users[i].FirstName, fetchedUser.FirstName, 
+            "First name mismatch. Expected: %s, Got: %s", users[i].FirstName, fetchedUser.FirstName)
+        assert.Equal(t, users[i].LastName, fetchedUser.LastName, 
+            "Last name mismatch. Expected: %s, Got: %s", users[i].LastName, fetchedUser.LastName)
+    }
+}
+\end{lstlisting}
+
+\subsubsection{TestUpdateUser}
+
+Энэхүү тест нь хэрэглэгчийн мэдээллийг шинэчлэх үйлдлийг шалгадаг.
+
+\begin{lstlisting}[language=Go, caption=Test Update User Function, frame=single]
+func TestUpdateUser(t *testing.T) {
+    db := setupTestDB()
+    defer test.CloseTestDatabase()
+
+    // Create sample user
+    originalUser := createSampleUser("johndoe")
+    db.Create(&originalUser)
+
+    // Prepare updated user data
+    updatedUserData := models.User{
+        FirstName: "Jane",
+        LastName:  "Smith",
+        Password:  "newpassword123",
+    }
+
+    r := httptest.NewRequest(http.MethodPut, "/user", nil)
+    updatedUser, err := services.UpdateUser(originalUser.ID, updatedUserData, r)
+
+    assert.NoError(t, err, "Error updating user")
+    assert.Equal(t, updatedUserData.FirstName, updatedUser.FirstName, "First name mismatch")
+    assert.Equal(t, updatedUserData.LastName, updatedUser.LastName, "Last name mismatch")
+    assert.NotEqual(t, "newpassword123", updatedUser.Password, "Password should be hashed")
+
+    var fetchedUser models.User
+    err = db.First(&fetchedUser, "id = ?", originalUser.ID).Error
+    assert.NoError(t, err, "Error fetching updated user")
+
+    assert.Equal(t, updatedUserData.FirstName, fetchedUser.FirstName, "First name mismatch in database")
+    assert.Equal(t, updatedUserData.LastName, fetchedUser.LastName, "Last name mismatch in database")
+    assert.NotEqual(t, "newpassword123", fetchedUser.Password, "Password should be hashed in database")
+}
+\end{lstlisting}
+\pagebreak

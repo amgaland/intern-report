@@ -11,585 +11,735 @@
 % Хавсралтын нэр. Хавсралт гэдэг үг агуулахгүй
 \chapter{Кодын хэрэгжүүлэлт}
 
-\section{Форм}
+\section{GORM}
 
-\subsection{useReducer болон React-Select сан ашигласан байдал}
-\begin{lstlisting}[language=Javascript, frame=single]
-import { useState, useReducer } from "react";
-import Head from "next/head";
-import styles from "../styles/Home.module.css";
-import Select from "react-select";
-import address from "../data/address";
+\subsection{Golang дээр Gorm aшигласан байдал}
+\begin{lstlisting}[language=Go, frame=single]
+	package services
 
-const SET_CITY = "city";
-const SET_DISTRICT = "district";
-const SET_WARD = "ward";
-
-const reducer = (state, action) => {
-  switch (action.type) {
-    case SET_CITY:
-      return {
-        city: action.index,
-        district: null,
-        ward: null,
-      };
-    case SET_DISTRICT:
-      return {
-        ...state,
-        district: action.index,
-        ward: null,
-      };
-    case SET_WARD:
-      return {
-        ...state,
-        ward: action.index,
-      };
-    default:
-      return state;
-  }
-};
-
-export default function Home() {
-  const [state, dispatch] = useReducer(reducer, {
-    city: null,
-    district: null,
-    ward: null,
-  });
-
-  const handleChange = (index, type) => {
-    dispatch({ type: type, index });
-  };
-
-  const register = (e) => {
-    e.preventDefault();
-    console.log(state);
-  };
-
-  return (
-    <div className={styles.container}>
-      <Head>
-        <title>Create Next App</title>
-      </Head>
-
-      <main className={styles.main}>
-        <div>
-          <form className={styles.grid} onSubmit={register}>
-            <label>
-              <p>Хот/Аймаг:</p>
-              <Select
-                value={address.map((i, index) => ({ ...i, index }))[state.city]}
-                onChange={(e) => handleChange(e.index, SET_CITY)}
-                options={address.map((i, index) => ({ ...i, index }))}
-                getOptionLabel={(option) => option.name}
-                getOptionValue={(option) => option.index}
-                placeholder="Сонгох"
-              />
-            </label>
-
-            <label>
-              <p>Сум/Дүүрэг:</p>
-              <Select
-                value={
-                  state.district != null
-                    ? address[state.city].districts.map((i, index) => ({
-                        ...i,
-                        index,
-                      }))[state.district]
-                    : []
-                }
-                onChange={(e) => handleChange(e.index, SET_DISTRICT)}
-                options={
-                  state.city != null
-                    ? address[state.city].districts.map((i, index) => ({
-                        ...i,
-                        index,
-                      }))
-                    : []
-                }
-                getOptionLabel={(option) => option.name}
-                getOptionValue={(option) => option.index}
-                placeholder="Сонгох"
-              />
-            </label>
-
-            <label>
-              <p>Баг/Хороо:</p>
-              <Select
-                value={
-                  state.ward != null
-                    ? address[state.city].districts[state.district].wards.map(
-                        (i, index) => ({ ...i, index })
-                      )[state.ward]
-                    : []
-                }
-                onChange={(e) => handleChange(e.index, SET_WARD)}
-                options={
-                  state.district != null
-                    ? address[state.city].districts[state.district].wards.map(
-                        (i, index) => ({ ...i, index })
-                      )
-                    : []
-                }
-                getOptionLabel={(option) => option.name}
-                getOptionValue={(option) => option.index}
-                placeholder="Сонгох"
-              />
-            </label>
-            <button className={styles.registerBtn}>Бүртгүүлэх</button>
-          </form>
-        </div>
-      </main>
-    </div>
-  );
-}
+	import (
+		"branch-admin-service/config"
+		"branch-admin-service/log"
+		"branch-admin-service/models"
+		"branch-admin-service/utils"
+		"errors"
+		"net/http"
+	
+		"github.com/gin-gonic/gin"
+		"gorm.io/gorm"
+	)
+	
+	func GetAllUsers(r *gin.Context) ([]models.User, error) {
+		var users []models.User
+		if err := config.DB.Find(&users).Error; err != nil {
+			log.Error("Failed to fetch users", map[string]interface{}{"error": err.Error()}, r)
+			return nil, err
+		}
+		return users, nil
+	}
+	
+	func CreateUser(user models.User, r *http.Request) (models.User, error) {
+		existingUser := config.DB.Where("login_id = ?", user.LoginID).First(&models.User{})
+		if existingUser.RowsAffected > 0 {
+			return models.User{}, errors.New("user already exists")
+		}
+	
+		hashedPassword, err := utils.HashPassword(user.Password)
+		if err != nil {
+			return models.User{}, err
+		}
+		user.Password = hashedPassword
+	
+		if err := config.DB.Create(&user).Error; err != nil {
+			return models.User{}, err
+		}
+		return user, nil
+	}
+	
+	func UpdateUser(id string, user models.User, r *http.Request) (models.User, error) {
+		if err := config.DB.Model(&user).Where("id = ?", id).Updates(user).Error; err != nil {
+			return models.User{}, err
+		}
+		return user, nil
+	}
+	
+	func DeleteUser(id string, r *http.Request) error {
+		if err := config.DB.Where("user_id = ?", id).Delete(&models.UserRole{}).Error; err != nil {
+			return err
+		}
+		if err := config.DB.Where("id = ?", id).Delete(&models.User{}).Error; err != nil {
+			return err
+		}
+		return nil
+	}
+	
+	func GetUserByID(id string, r *gin.Context) (*models.User, error) {
+		log.Info("Fetching user by ID from the database", map[string]interface{}{"id": id}, r)
+	
+		var user models.User
+		err := config.DB.Where("id = ?", id).First(&user).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				log.Warn("User not found", map[string]interface{}{"id": id}, r)
+				return nil, nil
+			}
+			log.Error("Database query error", map[string]interface{}{"error": err.Error()}, r)
+			return nil, err
+		}
+	
+		log.Info("User fetched successfully", map[string]interface{}{"id": id}, r)
+		return &user, nil
+	}
+	
+	func CheckLoginIDExists(loginID string, r *gin.Context) (bool, error) {
+		var user models.User
+		result := config.DB.Where("login_id = ?", loginID).First(&user)
+	
+		if result.Error != nil {
+			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+				return false, nil
+			}
+			log.Error("Failed to check login_id", map[string]interface{}{"error": result.Error.Error()}, r)
+			return false, result.Error
+		}
+	
+		return true, nil
+	}
+	
 \end{lstlisting}
 
-\subsection{Functional component дээр state ашигласан байдал}
+\section{Тест}
+\subsection{Ашигласан GORM дээрээ тест бичсэн байдал}
 
-\begin{lstlisting}[language=Javascript, frame=single]
-import { useEffect, useState } from "react";
-import Head from "next/head";
-import styles from "../styles/Home.module.css";
-import axios from "axios";
-import useForm from "../utils/useForm";
+\begin{lstlisting}[language=Go, frame=single]
+	package service_test
 
-const fetchData = (url) => {
-  //get data from next.js api
-  return axios
-    .get(`http://localhost:3000/api/${url}`)
-    .then((res) => {
-      const results = res.data;
-      return results;
-    })
-    .catch((err) => {
-      console.error(err);
-    });
-};
-
-export default function Home() {
-  const [values, handleChange] = useForm();
-  const [data, setData] = useState({
-    cities: [],
-    districts: [],
-    wards: [],
-  });
-
-  useEffect(() => {
-    fetchData(`cities`)
-      .then((res) => {
-        setData({ ...data, cities: res });
-      })
-      .catch((err) => {
-        console.error(err);
-      });
-  }, []);
-
-  const register = (e) => {
-    e.preventDefault();
-    console.log(values);
-  };
-
-  const handleSelect = (id, type) => {
-    if (type == "city") {
-      fetchData(`cities/${id}`)
-        .then((res) => {
-          setData({ ...data, districts: res, wards: [] }); //set districts and clear wards data
-        })
-        .catch((err) => {
-          console.error(err);
-        });
-    } else if (type == "district") {
-      //get wards
-      fetchData(`cities/${values.city}/${id}`)
-        .then((res) => {
-          setData({ ...data, wards: res });
-        })
-        .catch((err) => {
-          console.error(err);
-        });
-    }
-  };
-
-  const OptionItems = (props) => {
-    const options = props.items.map((item) => {
-      return (
-        <option key={item.id} value={item.id}>
-          {item.name}
-        </option>
-      );
-    });
-
-    return options;
-  };
-
-  return (
-    <div className={styles.container}>
-      <Head>
-        <title>Create Next App</title>
-      </Head>
-
-      <main className={styles.main}>
-        <div>
-          <form className={styles.grid} onSubmit={register}>
-            <label>
-              Хот/Аймаг:
-              <select
-                value={values.city}
-                defaultValue="default"
-                name="city"
-                onChange={(e) => {
-                  handleChange(e.target.name, e.target.value);
-                  handleSelect(e.target.value, "city");
-                }}
-              >
-                <option value="default" hidden>
-                  Хот/Аймаг
-                </option>
-
-                {data.cities.length > 0 ? (
-                  <OptionItems items={data.cities} />
-                ) : null}
-
-                {/* {data.cities.map((item) => {
-                  return (
-                    <option key={item.id} value={item.name}>
-                      {item.name}
-                    </option>
-                  );
-                })} */}
-              </select>
-            </label>
-
-            <label>
-              Сум/Дүүрэг:
-              <select
-                value={values.district}
-                defaultValue="default"
-                name="district"
-                onChange={(e) => {
-                  handleChange(e.target.name, e.target.value);
-                  handleSelect(e.target.value, "district");
-                }}
-              >
-                <option value="default" hidden>
-                  Сум/Дүүрэг
-                </option>
-                {data.districts.length > 0 ? (
-                  <OptionItems items={data.districts} />
-                ) : null}
-              </select>
-            </label>
-
-            <label>
-              Баг/Хороо:
-              <select
-                value={values.ward}
-                defaultValue="default"
-                name="ward"
-                onChange={(e) => {
-                  handleChange(e.target.name, e.target.value);
-                }}
-              >
-                <option value="default" hidden>
-                  Баг/Хороо
-                </option>
-                {data.wards.length > 0 ? (
-                  <OptionItems items={data.wards} />
-                ) : null}
-              </select>
-            </label>
-            <button style={{ margin: "5px" }}>Бүртгүүлэх</button>
-          </form>
-        </div>
-      </main>
-    </div>
-  );
-}
+	import (
+		"log"
+		"net/http"
+		"net/http/httptest"
+		"testing"
+		"time"
+	
+		"branch-admin-service/config"
+		"branch-admin-service/models"
+		services "branch-admin-service/services/admin"
+		test "branch-admin-service/test/utils"
+	
+		"github.com/stretchr/testify/assert"
+		"gorm.io/gorm"
+	)
+	
+	func setupTestDB() *gorm.DB {
+		test.ConnectTestDatabase()
+		config.DB.Exec("TRUNCATE TABLE users RESTART IDENTITY CASCADE") 
+		return config.DB
+	}
+	
+	
+	func dropExistingUser(db *gorm.DB, loginID string) {
+		var existingUser models.User
+		if err := db.Where("login_id = ?", loginID).First(&existingUser).Error; err == nil {
+			if err := db.Delete(&existingUser).Error; err != nil {
+				log.Fatal("Error deleting existing user:", err)
+			}
+		}
+	}
+	
+	func createSampleUser(loginID string) models.User {
+		dummyDate := time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC)
+		emailPersonal := "personal@mail.com"
+		phoneNumberWork := "9876543210"
+		admin := "admin"
+	
+		return models.User{
+			FirstName:           "John",
+			LastName:            "Doe",
+			LoginID:             loginID,
+			EmailWork:           "test@mail.com",
+			EmailPersonal:       &emailPersonal,
+			PhoneNumberWork:     &phoneNumberWork,
+			PhoneNumberPersonal: &phoneNumberWork,
+			IsActive:            true,
+			ActiveStartDate:     dummyDate,
+			ActiveEndDate:       &dummyDate,
+			Password:            "password123",
+			CreatedAt:           dummyDate,
+			UpdatedAt:           dummyDate,
+			CreatedBy:           &admin,
+			UpdatedBy:           &admin,
+		}
+	}
+	
+	func TestCreateUser(t *testing.T) {
+		db := setupTestDB()
+		defer test.CloseTestDatabase()
+	
+		loginID := "johndoe"
+		dropExistingUser(db, loginID)
+	
+		r := httptest.NewRequest(http.MethodPost, "/", nil)
+		user := createSampleUser(loginID)
+	
+		createdUser, err := services.CreateUser(user, r)
+	
+		assert.NoError(t, err, "Error creating user")
+		assert.NotZero(t, createdUser.ID, "User ID should not be zero")
+		assert.NotEqual(t, "password123", createdUser.Password, "Password should be hashed")
+	
+		var fetchedUser models.User
+		err = db.First(&fetchedUser, "id = ?", createdUser.ID).Error
+		assert.NoError(t, err, "Error fetching user")
+	
+		assert.Equal(t, "John", fetchedUser.FirstName, "First name mismatch")
+		assert.Equal(t, "Doe", fetchedUser.LastName, "Last name mismatch")
+		assert.NotEqual(t, "password123", fetchedUser.Password, "Password should be hashed")
+	}
+	
+	func TestGetAllUsers(t *testing.T) {
+		db := setupTestDB()
+		defer test.CloseTestDatabase()
+	
+		db.Exec("TRUNCATE TABLE users RESTART IDENTITY CASCADE")
+	
+		users := []models.User{
+			{FirstName: "John", LastName: "Doe"},
+			{FirstName: "Jane", LastName: "Smith"},
+		}
+		for _, user := range users {
+			db.Create(&user)
+		}
+	
+		r := httptest.NewRequest(http.MethodGet, "/users", nil)
+		allUsers, err := services.GetAllUsers(r)
+	
+		assert.NoError(t, err, "Error fetching all users")
+		assert.Len(t, allUsers, len(users), "Unexpected number of users fetched")
+	
+		for i, fetchedUser := range allUsers {
+			assert.True(t, i < len(users), "Index %d out of range for expected users", i)
+			assert.Equal(t, users[i].FirstName, fetchedUser.FirstName, 
+				"First name mismatch. Expected: %s, Got: %s", users[i].FirstName, fetchedUser.FirstName)
+			assert.Equal(t, users[i].LastName, fetchedUser.LastName, 
+				"Last name mismatch. Expected: %s, Got: %s", users[i].LastName, fetchedUser.LastName)
+		}
+	}
+	
+	
+	
+	func TestUpdateUser(t *testing.T) {
+		db := setupTestDB()
+		defer test.CloseTestDatabase()
+	
+		// Create sample user
+		originalUser := createSampleUser("johndoe")
+		db.Create(&originalUser)
+	
+		// Prepare updated user data
+		updatedUserData := models.User{
+			FirstName: "Jane",
+			LastName:  "Smith",
+			Password:  "newpassword123",
+		}
+	
+		r := httptest.NewRequest(http.MethodPut, "/user", nil)
+		updatedUser, err := services.UpdateUser(originalUser.ID, updatedUserData, r)
+	
+		assert.NoError(t, err, "Error updating user")
+		assert.Equal(t, updatedUserData.FirstName, updatedUser.FirstName, "First name mismatch")
+		assert.Equal(t, updatedUserData.LastName, updatedUser.LastName, "Last name mismatch")
+		assert.NotEqual(t, "newpassword123", updatedUser.Password, "Password should be hashed")
+	
+		var fetchedUser models.User
+		err = db.First(&fetchedUser, "id = ?", originalUser.ID).Error
+		assert.NoError(t, err, "Error fetching updated user")
+	
+		assert.Equal(t, updatedUserData.FirstName, fetchedUser.FirstName, "First name mismatch in database")
+		assert.Equal(t, updatedUserData.LastName, fetchedUser.LastName, "Last name mismatch in database")
+		assert.NotEqual(t, "newpassword123", fetchedUser.Password, "Password should be hashed in database")
+	}
+	
+	func TestDeleteUser(t *testing.T) {
+		db := setupTestDB()
+		defer test.CloseTestDatabase()
+	
+		// Create sample user
+		user := createSampleUser("johndoe")
+		db.Create(&user)
+	
+		r := httptest.NewRequest(http.MethodDelete, "/user", nil)
+		err := services.DeleteUser(user.ID, r)
+	
+		assert.NoError(t, err, "Error deleting user")
+	
+		var fetchedUser models.User
+		err = db.Where("id = ?", user.ID).First(&fetchedUser).Error
+		assert.Error(t, err, "Expected error for fetching deleted user")
+		assert.Equal(t, gorm.ErrRecordNotFound, err, "Expected record not found error for deleted user")
+	}
+	
+	
+	func TestGetUserByID(t *testing.T) {
+		db := setupTestDB()
+		defer test.CloseTestDatabase()
+	
+		db.Exec("TRUNCATE TABLE users RESTART IDENTITY CASCADE")
+	
+		sampleUser := models.User{FirstName: "John", LastName: "Doe", ID: "123"}
+		db.Create(&sampleUser)
+	
+		t.Run("Valid ID", func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/user/123", nil)
+			user, err := services.GetUserByID("123", r)
+	
+			assert.NoError(t, err, "Error fetching user with valid ID")
+			assert.NotNil(t, user, "User should not be nil for valid ID")
+			assert.Equal(t, sampleUser.ID, user.ID, "User ID mismatch")
+			assert.Equal(t, sampleUser.FirstName, user.FirstName, "User first name mismatch")
+		})
+	
+		t.Run("Invalid ID", func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/user/999", nil)
+			user, err := services.GetUserByID("999", r)
+	
+			// Handle the error cleanly
+			assert.NoError(t, err, "Error should be nil for non-existent user ID")
+			assert.Nil(t, user, "Fetched user should be nil for non-existent ID")
+		})
+	}
 \end{lstlisting}
 
-\section{Toast компонент}
+\section{Front-end}
 
-\subsection{Toast/context.tsx - Context үүсгэх}
-\begin{lstlisting}[language=Javascript, frame=single]
-import { createContext, useReducer } from "react";
-
-import { ActionType } from "types";
-
-export interface ToastType {
-  id?: string;
-  message: string;
-  type: "success" | "info" | "warning" | "error";
-  duration?: number;
-}
-
-export const ACTION_TOAST = "TOAST";
-export const ACTION_RESET = "RESET";
-export const ACTION_CLEAR = "CLEAR";
-
-export const INITIAL_STATE: { toasts: ToastType[] } = {
-  toasts: [],
-};
-
-type Actions =
-  | (ActionType<typeof ACTION_TOAST> & { toast: ToastType })
-  | ActionType<typeof ACTION_RESET>
-  | (ActionType<typeof ACTION_CLEAR> & { id: string });
-
-export const ToastContext = createContext(null);
-ToastContext.displayName = "ToastContext";
-export const ToastControlContext = createContext(null);
-ToastControlContext.displayName = "ToastControlContext";
-
-function toast(state: typeof INITIAL_STATE, toast: ToastType): typeof state {
-  return {
-    ...state,
-    toasts: [...state.toasts, toast],
-  };
-}
-
-function clear(state: typeof INITIAL_STATE, toastId: string): typeof state {
-  return {
-    ...state,
-    toasts: state.toasts.filter((toast) => toast.id !== toastId),
-  };
-}
-
-function reducer(state = INITIAL_STATE, action: Actions): typeof state {
-  switch (action.type) {
-    case ACTION_TOAST:
-      return toast(state, action.toast);
-    case ACTION_RESET:
-      return INITIAL_STATE;
-    case ACTION_CLEAR:
-      return clear(state, action.id);
-    default:
-      return state;
-  }
-}
-
-export const ToastProvider = ({ children }) => {
-  const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
-
-  return (
-    <ToastContext.Provider value={state}>
-      <ToastControlContext.Provider value={dispatch}>
-        {children}
-      </ToastControlContext.Provider>
-    </ToastContext.Provider>
-  );
-};
-\end{lstlisting}
-
-\subsection{Toast/hooks.ts - Custom hook бичих}
-
-\begin{lstlisting}[language=Javascript, frame=single]
-import { useCallback, useContext, useMemo } from "react";
-
-import {
-  ACTION_CLEAR,
-  ACTION_TOAST,
-  ACTION_RESET,
-  ToastContext,
-  ToastControlContext,
-  ToastType,
-} from "./context";
-
-function generateToastId() {
-  return Math.random().toString(36).substr(2, 9);
-}
-
-export function useToast() {
-  const state = useContext(ToastContext);
-  if (!state) throw new TypeError("Please use within ToastProvider");
-  return state;
-}
-
-export function useToastControl() {
-  const dispatch = useContext(ToastControlContext);
-  if (!dispatch) throw new TypeError("Please use within ToastProvider");
-
-  const reset = useCallback(() => dispatch({ type: ACTION_RESET }), [dispatch]);
-
-  const toast = useCallback(
-    (toast: ToastType) => {
-      const toastId = generateToastId();
-
-      dispatch({ toast: { ...toast, id: toastId }, type: ACTION_TOAST });
-
-      setTimeout(() => {
-        dispatch({ id: toastId, type: ACTION_CLEAR });
-      }, toast.duration || 4000);
-    },
-    [dispatch]
-  );
-
-  return useMemo(() => {
-    return { reset, toast };
-  }, [toast, reset]);
-}
-\end{lstlisting}
-
-\subsection{Toast/index.ts}
-
-\begin{lstlisting}[language=Javascript, frame=single]
-export * from "./Toast";
-export * from "./context";
-export * from "./hooks";
-
-\end{lstlisting}
-
-\subsection{Toast/Toast.tsx - Үндсэн Toast компонент}
-
-\begin{lstlisting}[language=Javascript, frame=single]
-import { useState, forwardRef } from "react";
-
-import { IconButton, Snackbar } from "@material-ui/core";
-import MuiAlert, { AlertProps } from "@material-ui/core/Alert";
-import { Close as CloseIcon } from "@material-ui/icons";
-
-import { ToastType } from "./context";
-import { useToast } from "./hooks";
-
-const Alert = forwardRef<HTMLDivElement, AlertProps>(function Alert(
-  props,
-  ref
-) {
-  return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
-});
-
-export function Toast({ message, type, duration = 4000 }: ToastType) {
-  const [open, setOpen] = useState(true);
-
-  const onClose = () => setOpen(false);
-
-  const action = (
-    <IconButton
-      size="small"
-      aria-label="close"
-      color="inherit"
-      onClick={onClose}
-    >
-      <CloseIcon fontSize="small" />
-    </IconButton>
-  );
-
-  return (
-    <Snackbar
-      anchorOrigin={{ horizontal: "center", vertical: "bottom" }}
-      open={open}
-      autoHideDuration={duration}
-      onClose={onClose}
-      action={action}
-    >
-      <Alert onClose={onClose} severity={type} sx={{ width: "100%" }}>
-        {message}
-      </Alert>
-    </Snackbar>
-  );
-}
-
-export function ToastContainer() {
-  const { toasts } = useToast();
-  return toasts.map((toast) => <Toast key={toast.id} {...toast} />);
-}
+\subsection{/admin/user/edit/page.tsx}
+\begin{lstlisting}[language=Typescript, frame=single]
+	"use client";
+	import { useEffect, useState } from "react";
+	import { useRouter, useSearchParams } from "next/navigation";
+	import { Input } from "@/components/ui/input";
+	import { Button } from "@/components/ui/button";
+	import { Label } from "@/components/ui/label";
+	import { toast } from "@/hooks/use-toast";
+	import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+	import { req } from "@/app/api";
+	import { useSession } from "next-auth/react";
+	import { DatePickerWithRange } from "@/components/date-range-picker";
+	import UserRole from "./components/user-role";
+	
+	interface UserFormData {
+		first_name: string;
+		last_name: string;
+		login_id: string;
+		email_work: string;
+		email_personal: string;
+		phone_number_work: string;
+		phone_number_personal: string;
+		is_active: boolean;
+		active_start_date: string;
+		active_end_date: string;
+		password?: string;
+		created_by: string;
+		updated_by: string;
+	}
+	
+	export default function UserFormPage() {
+		const searchParams = useSearchParams();
+		const id = searchParams.get("id");
+		const router = useRouter();
+		const { data: session } = useSession();
+	
+		const initialFormData: UserFormData = {
+			first_name: "",
+			last_name: "",
+			login_id: "",
+			email_work: "",
+			email_personal: "",
+			phone_number_work: "",
+			phone_number_personal: "",
+			is_active: false,
+			active_start_date: "",
+			active_end_date: "",
+			password: "",
+			created_by: session?.user?.id || "",
+			updated_by: session?.user?.id || "",
+		};
+	
+		const [formData, setFormData] = useState<UserFormData>(initialFormData);
+		const [loading, setLoading] = useState(false);
+		const [errors, setErrors] = useState<Record<string, string>>({});
+	
+		useEffect(() => {
+			const fetchUserData = async () => {
+				if (!id || !session?.user?.token) return;
+	
+				try {
+					setLoading(true);
+					const response = await req.GET(
+						`/admin/users?id=${id}`,
+						session.user.token
+					);
+					setFormData({
+						...response,
+						updated_by: session.user.id || "",
+					});
+				} catch (error) {
+					toast({
+						title: "Алдаа",
+						description: "Хэрэглэгчийн мэдээлэл авахад алдаа гарлаа",
+						variant: "destructive",
+					});
+				} finally {
+					setLoading(false);
+				}
+			};
+	
+			fetchUserData();
+		}, [id, session?.user?.id, session?.user?.token]);
+	
+		const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+			const { name, value, type, checked } = e.target;
+			setFormData((prev) => ({
+				...prev,
+				[name]: type === "checkbox" ? checked : value,
+			}));
+		};
+	
+		const handleSubmit = async (e: React.FormEvent) => {
+			e.preventDefault();
+	
+			try {
+				setLoading(true);
+				const response = await req.PUT(
+					`/admin/users/${id || ""}`,
+					session?.user?.token || "",
+					{
+						...formData,
+						active_start_date: formData.active_start_date || null,
+						active_end_date: formData.active_end_date || null,
+					}
+				);
+	
+				if (response) {
+					toast({
+						title: "Амжилттай",
+						description: "Мэдээлэл шинэчлэгдлээ",
+					});
+				}
+			} catch (error) {
+				console.error("Error submitting form:", error);
+				toast({
+					title: "Алдаа",
+					description: "Гэнэтийн алдаа гарлаа",
+					variant: "destructive",
+				});
+			} finally {
+				setLoading(false);
+			}
+		};
+	
+		return (
+			<div className="py-8 px-4">
+				<Card>
+					<CardHeader>
+						<CardTitle className="text-2xl">
+							{id ? "Хэрэглэгч засах" : "Шинэ хэрэглэгч нэмэх"}
+						</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<form onSubmit={handleSubmit} className="space-y-4">
+							<div className="space-y-6">
+								<h3 className="text-lg font-medium">Хувийн мэдээлэл</h3>
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div>
+										<Label htmlFor="first_name">Нэр</Label>
+										<Input
+											id="first_name"
+											name="first_name"
+											type="text"
+											value={formData.first_name}
+											onChange={handleChange}
+											className={errors.first_name ? "border-red-500" : ""}
+										/>
+										{errors.first_name && (
+											<p className="text-red-500 text-sm mt-1">
+												{errors.first_name}
+											</p>
+										)}
+									</div>
+									<div>
+										<Label htmlFor="last_name">Овог</Label>
+										<Input
+											id="last_name"
+											name="last_name"
+											type="text"
+											value={formData.last_name}
+											onChange={handleChange}
+											className={errors.last_name ? "border-red-500" : ""}
+										/>
+										{errors.last_name && (
+											<p className="text-red-500 text-sm mt-1">
+												{errors.last_name}
+											</p>
+										)}
+									</div>
+									<div>
+										<Label htmlFor="login_id">Нэвтрэх ID</Label>
+										<Input
+											id="login_id"
+											name="login_id"
+											type="text"
+											value={formData.login_id}
+											onChange={handleChange}
+											className={errors.login_id ? "border-red-500" : ""}
+										/>
+										{errors.login_id && (
+											<p className="text-red-500 text-sm mt-1">
+												{errors.login_id}
+											</p>
+										)}
+									</div>
+									{!id && (
+										<div>
+											<Label htmlFor="password">Нууц үг</Label>
+											<Input
+												id="password"
+												name="password"
+												type="password"
+												value={formData.password}
+												onChange={handleChange}
+												className={errors.password ? "border-red-500" : ""}
+											/>
+											{errors.password && (
+												<p className="text-red-500 text-sm mt-1">
+													{errors.password}
+												</p>
+											)}
+										</div>
+									)}
+								</div>
+							</div>
+							<div className="space-y-2">
+								<h3 className="text-lg font-medium">Холбоо барих</h3>
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div>
+										<Label htmlFor="email_work">Ажлын имэйл</Label>
+										<Input
+											id="email_work"
+											name="email_work"
+											type="email"
+											value={formData.email_work}
+											onChange={handleChange}
+											className={errors.email_work ? "border-red-500" : ""}
+										/>
+										{errors.email_work && (
+											<p className="text-red-500 text-sm mt-1">
+												{errors.email_work}
+											</p>
+										)}
+									</div>
+									<div>
+										<Label htmlFor="email_personal">Хувийн имэйл</Label>
+										<Input
+											id="email_personal"
+											name="email_personal"
+											type="email"
+											value={formData.email_personal}
+											onChange={handleChange}
+											className={errors.email_personal ? "border-red-500" : ""}
+										/>
+										{errors.email_personal && (
+											<p className="text-red-500 text-sm mt-1">
+												{errors.email_personal}
+											</p>
+										)}
+									</div>
+									<div>
+										<Label htmlFor="phone_number_work">Ажлын дугаар</Label>
+										<Input
+											id="phone_number_work"
+											name="phone_number_work"
+											type="tel"
+											value={formData.phone_number_work}
+											onChange={handleChange}
+										/>
+									</div>
+									<div>
+										<Label htmlFor="phone_number_personal">Хувийн дугаар</Label>
+										<Input
+											id="phone_number_personal"
+											name="phone_number_personal"
+											type="tel"
+											value={formData.phone_number_personal}
+											onChange={handleChange}
+										/>
+									</div>
+								</div>
+							</div>
+							<div className="space-y-2">
+								<h3 className="text-lg font-medium">Төлөв</h3>
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+									<div className="flex items-center space-x-2">
+										<input
+											id="is_active"
+											name="is_active"
+											type="checkbox"
+											checked={formData.is_active}
+											onChange={handleChange}
+											className="h-4 w-4 border-gray-300 rounded"
+										/>
+										<Label htmlFor="is_active">Идэвхтэй эсэх</Label>
+									</div>
+									<div className="space-x-2">
+										<Label>Ажиллах хугацаа:</Label>
+										<DatePickerWithRange
+											value={{
+												from: formData.active_start_date ? new Date(formData.active_start_date) : undefined,
+												to: formData.active_end_date ? new Date(formData.active_end_date) : undefined,
+											}}
+											onChange={(date) => {
+												setFormData((prev) => ({
+													...prev,
+													active_start_date: date?.from ? date.from.toISOString(): "",
+													active_end_date: date?.to ? date.to.toISOString() : "",
+												}));
+											}}
+										/>
+									</div>
+								</div>
+							</div>
+							<UserRole userId={id!} />
+							<div>
+								<Button type="submit" className="w-full" disabled={loading}>
+									{loading ? "Уншиж байна..." : id ? "Засах" : "Нэмэх"}
+								</Button>
+							</div>
+						</form>
+					</CardContent>
+				</Card>
+			</div>
+		);
+	}
+	
 \end{lstlisting}
 \pagebreak
-\section{Toast компонент дээр интерфэйсийн автоматжуулсан тест бичсэн байдал}
+\section{Back-End}
 
-\subsection{tests/Toast.test.tsx}
-\begin{lstlisting}[language=Javascript, frame=single]
-import {
-  cleanup,
-  render,
-  screen,
-  waitForElementToBeRemoved,
-} from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+\subsection{/Controller/Admin/userController.go}
+\begin{lstlisting}[language=Go, frame=single]
+	package controllers
 
-import { Toast } from "../../../components/Toast";
-
-jest.useFakeTimers();
-describe("Test: Toast component", () => {
-  test("show message and delete toast after close button ", async () => {
-    const message = "Hello, it's toast";
-
-    render(<Toast message={message} type="success" />);
-    expect(screen.getByText(message)).toBeInTheDocument();
-
-    userEvent.click(
-      screen.getByRole("button", {
-        name: /close/i,
-      })
-    );
-
-    await waitForElementToBeRemoved(() => screen.getByText(message));
-    expect(screen.queryByText(message)).not.toBeInTheDocument();
-  });
-
-  test("duration", async () => {
-    const cssAnimation = 300;
-    const toasts = [
-      {
-        duration: 4000,
-        message: "Toast 1",
-      },
-      {
-        duration: 5000,
-        message: "Toast 2",
-      },
-    ];
-
-    toasts.forEach((toast) =>
-      render(
-        <Toast
-          message={toast.message}
-          type="success"
-          duration={toast.duration}
-        />
-      )
-    );
-
-    expect(screen.getByText("Toast 1")).toBeInTheDocument();
-    await waitForElementToBeRemoved(() => screen.getByText("Toast 1"), {
-      timeout: toasts[0].duration + cssAnimation,
-    });
-    expect(screen.queryByText("Toast 1")).not.toBeInTheDocument();
-
-    expect(screen.getByText("Toast 2")).toBeInTheDocument();
-    await waitForElementToBeRemoved(() => screen.getByText("Toast 2"), {
-      timeout: 1000 + cssAnimation,
-    });
-    expect(screen.queryByText("Toast 2")).not.toBeInTheDocument();
-  });
-
-  test("check type", () => {
-    const types = [
-      {
-        class: "filledSuccess",
-        message: "Success toast",
-        type: "success",
-      },
-      { class: "filledError", message: "Error toast", type: "error" },
-      { class: "filledInfo", message: "Info toast", type: "info" },
-      {
-        class: "filledWarning",
-        message: "Warning toast",
-        type: "warning",
-      },
-    ];
-
-    types.forEach((opt) => {
-      const { container } = render(
-        <Toast
-          message={opt.message}
-          type={opt.type as "success" | "info" | "warning" | "error"}
-        />
-      );
-      const alert = container.firstChild;
-
-      expect(alert.firstChild).toHaveClass(`MuiAlert-${opt.class}`);
-      cleanup();
-    });
-  });
-});
+	import (
+		"branch-admin-service/log"
+		"branch-admin-service/models"
+		services "branch-admin-service/services/admin"
+		"net/http"
+	
+		"github.com/gin-gonic/gin"
+	)
+	
+	func GetAllUsers(c *gin.Context) {
+		id := c.Query("id")
+	
+		if id != "" {
+			user, err := services.GetUserByID(id, c)
+			if err != nil {
+				log.Error("Failed to fetch user by ID", map[string]interface{}{"error": err.Error(), "id": id}, c)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch user"})
+				return
+			}
+			if user == nil {
+				log.Warn("User not found", map[string]interface{}{"id": id}, c)
+				c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+				return
+			}
+			log.Info("User fetched successfully", map[string]interface{}{"id": id}, c)
+			c.JSON(http.StatusOK, user)
+			return
+		}
+	
+		users, err := services.GetAllUsers(c)
+		if err != nil {
+			log.Error("Failed to fetch users", map[string]interface{}{"error": err.Error()}, c)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch users"})
+			return
+		}
+		log.Info("Users fetched successfully", map[string]interface{}{"count": len(users)}, c)
+		c.JSON(http.StatusOK, users)
+	}
+	
+	func CreateUser(c *gin.Context) {
+		var user models.User
+		if err := c.ShouldBindJSON(&user); err != nil {
+			log.Error("Failed to bind user JSON", map[string]interface{}{"error": err.Error()}, c)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload"})
+			return
+		}
+	
+		log.Info("Creating user", map[string]interface{}{"user": user}, c)
+	
+		newUser, err := services.CreateUser(user, c.Request)
+		if err != nil {
+			log.Error("Failed to create user", map[string]interface{}{"user": user, "error": err.Error()}, c)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	
+		log.Info("User created successfully", map[string]interface{}{"userID": newUser.ID}, c)
+		c.JSON(http.StatusCreated, newUser)
+	}
+	
+	func UpdateUser(c *gin.Context) {
+		id := c.Param("id")
+		var user models.User
+	
+		if err := c.ShouldBindJSON(&user); err != nil {
+			log.Error("Failed to bind user JSON", map[string]interface{}{"error": err.Error()}, c)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload"})
+			return
+		}
+	
+		log.Info("Updating user", map[string]interface{}{"userID": id, "user": user}, c)
+		updatedUser, err := services.UpdateUser(id, user, c.Request)
+		if err != nil {
+			log.Error("Failed to update user", map[string]interface{}{"userID": id, "error": err.Error()}, c)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
+			return
+		}
+	
+		log.Info("User updated successfully", map[string]interface{}{"userID": updatedUser.ID}, c)
+		c.JSON(http.StatusOK, updatedUser)
+	}
+	
+	func DeleteUser(c *gin.Context) {
+		id := c.Param("id")
+	
+		if err := services.DeleteUser(id, c.Request); err != nil {
+			log.Error("Failed to delete user", map[string]interface{}{"userID": id, "error": err.Error()}, c)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
+			return
+		}
+	
+		log.Info("User deleted successfully", map[string]interface{}{"userID": id}, c)
+		c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
+	}
+	
+	func CheckLoginIDExists(c *gin.Context) {
+		loginID := c.Query("login_id")
+		if loginID == "" {
+			log.Error("login_id is required", map[string]interface{}{}, c)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "login_id is required"})
+			return
+		}
+	
+		exists, err := services.CheckLoginIDExists(loginID, c)
+		if err != nil {
+			log.Error("Failed to check login_id", map[string]interface{}{"error": err.Error()}, c)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check login_id"})
+			return
+		}
+	
+		log.Info("Checked login_id existence", map[string]interface{}{"login_id": loginID, "exists": exists}, c)
+		c.JSON(http.StatusOK, gin.H{"exists": exists})
+	}
+	
 \end{lstlisting}

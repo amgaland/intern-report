@@ -1,0 +1,138 @@
+\section{Back-End хэрэгжүүлэлт}
+Энэ код нь Gin framework ашиглан хэрэглэгчийн бүртгэл, шинэчлэл, устгал, шалгалт хийх RESTful API-г зохион байгуулсан бөгөөд лог бичлэг болон аль болох тодорхой мэдээлэл авах боломжтой Controller бичих зорилготой. 
+
+Сурах ур чадвар:
+\begin{itemize}
+	\item Golang хэлний мэдлэг
+	\item Gin framework ашиглах
+	\item GORM ORM ашиглах
+	\item Өгөгдлийн сангийн зохицуулалт хийх
+	\item Hashing ба нууцлал
+	\item Алдаа удирдах
+	\item Лог хөтлөх
+	\item HTTP хүсэлттэй ажилллах
+	\item Кодын бүтэц зохион байгуулалт
+\end{itemize}
+
+Кодны шаардлага:
+\begin{itemize}
+	\item Golang хэлний синтакс, өгөгдлийн төрөл, функцийн ажиллах зарчим мэдэх 
+	\item REST API зохион байгуулах, маршрутын менежмент хийх чадвартай байх.
+	\item GORM ашиглан өгөгдлийн сангийн хүсэлтүүд боловсруулах чадвартай байх.
+	\item CRUD үйлдлүүдийг бүтээх
+	\item JSON өгөгдлийг боловсруулах
+	\item Нууц үгийн хашлалат, хэрэглэгчийн мэдээллийг хамгаалах
+	\item API-д гарч болох алдааг зөв удирдаж, тохирсон HTTP код буцаах чадвартай байх
+	\item Controller  давхаргыг зөв зохион байгуулах
+	\item API тест хийх
+\end{itemize}
+\pagebreak
+
+\subsection{Controller}
+Энэ хэсэгт хэрэглэгчийн мэдээлэлтэй холбоотой CRUD үйлдлүүдийг GORM ашиглан хийнэ. CRUD(create, Read, Update, Delete) үйлдлүүд нь хэрэглэгчийн мэдээллийг үүсгэх, унших, шинэчлэх, устгах боломжийг олгодог.
+
+\subsection{GetAllUsers}
+Хэрэглэгчийн мэдээллийг Postgres өгөгдлийн сангаас авах API-ийг хэрэгжүүлэх хэсэг. GetAllUsers функц нь өгөгдлийн сангаас бүх хэрэглэгчийн мэдээллийг авахад зориулагдсан бөгөөд хэрэглэгчийн жагсаалтыг буцаадаг.
+
+\begin{lstlisting}[language=Go, caption=CreateUser Controller, frame=single]
+	func CreateUser(c *gin.Context) {
+	var user models.User
+	if err := c.ShouldBindJSON(&user); err != nil {
+		log.Error("Failed to bind user JSON", map[string]interface{}{"error": err.Error()}, c)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload"})
+		return
+	}
+
+	log.Info("Creating user", map[string]interface{}{"user": user}, c)
+
+	newUser, err := services.CreateUser(user, c.Request)
+	if err != nil {
+		log.Error("Failed to create user", map[string]interface{}{"user": user, "error": err.Error()}, c)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	log.Info("User created successfully", map[string]interface{}{"userID": newUser.ID}, c)
+	c.JSON(http.StatusCreated, newUser)
+}
+\end{lstlisting}
+
+\subsection{CreateUser}
+CreateUser функц нь хэрэглэгчийн мэдээллийг JSON хэлбэрээр хүлээн авч, models.User объектоор хувиргадаг. Ингэснээр хэрэглэгчийн мэдээллийг сервер рүү илгээх боломжтой болно.
+\begin{lstlisting}[language=Go, caption=CreatUser Controller, frame=single]
+	func GetAllUsers(r *http.Request) ([]models.User, error) {
+		var users []models.User
+		if err := config.DB.Find(&users).Error; err != nil {
+			log.Error("Failed to fetch users", map[string]interface{}{"error": err.Error()}, r)
+			return nil, err
+		}
+		return users, nil
+	}
+\end{lstlisting}
+
+\subsection{UpdateUser}
+UpdateUser функц нь хэрэглэгчийн ID болон шинэ мэдээллийг хүлээн авч, models.User объектоор шинэчилнэ.
+\begin{lstlisting}[language=Go, caption=UpdateUser Controller, frame=single]
+	func UpdateUser(c *gin.Context) {
+	id := c.Param("id")
+	var user models.User
+
+	if err := c.ShouldBindJSON(&user); err != nil {
+		log.Error("Failed to bind user JSON", map[string]interface{}{"error": err.Error()}, c)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload"})
+		return
+	}
+
+	log.Info("Updating user", map[string]interface{}{"userID": id, "user": user}, c)
+	updatedUser, err := services.UpdateUser(id, user, c.Request)
+	if err != nil {
+		log.Error("Failed to update user", map[string]interface{}{"userID": id, "error": err.Error()}, c)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
+		return
+	}
+
+	log.Info("User updated successfully", map[string]interface{}{"userID": updatedUser.ID}, c)
+	c.JSON(http.StatusOK, updatedUser)
+}
+\end{lstlisting}
+
+\subsection{DeleteUser}
+DeleteUser функц нь хэрэглэгчийн ID-ийг URL параметрээс авч, тухайн хэрэглэгчийг устгах үйлдлийг гүйцэтгэдэг.
+\begin{lstlisting}[language=Go, caption=DeleteUser Controller, frame=single]
+	func DeleteUser(c *gin.Context) {
+		id := c.Param("id")
+
+		if err := services.DeleteUser(id, c.Request); err != nil {
+			log.Error("Failed to delete user", map[string]interface{}{"userID": id, "error": err.Error()}, c)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
+			return
+		}
+
+		log.Info("User deleted successfully", map[string]interface{}{"userID": id}, c)
+		c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
+	}
+\end{lstlisting}
+
+\subsection{CheckLoginIDExists}
+CheckLoginIDExists функц нь хэрэглэгчийн login id-ийг URL-ийн query параметрээс авч, энэ login id-ийн оршин байгаа эсэхийг шалгадаг.
+\begin{lstlisting}[language=Go, caption=CheckLoginIDExists Controller, frame=single]
+func CheckLoginIDExists(c *gin.Context) {
+	loginID := c.Query("login_id")
+	if loginID == "" {
+		log.Error("login_id is required", map[string]interface{}{}, c)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "login_id is required"})
+		return
+	}
+
+	exists, err := services.CheckLoginIDExists(loginID, c)
+	if err != nil {
+		log.Error("Failed to check login_id", map[string]interface{}{"error": err.Error()}, c)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check login_id"})
+		return
+	}
+
+	log.Info("Checked login_id existence", map[string]interface{}{"login_id": loginID, "exists": exists}, c)
+	c.JSON(http.StatusOK, gin.H{"exists": exists})
+}
+
+\end{lstlisting}

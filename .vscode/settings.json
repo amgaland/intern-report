@@ -32,21 +32,15 @@
 		"*.cb": true,
 		"*.cb2": true,
 		".*.lb": true,
-		"*.*.gz": true
+		"*.*.gz":true,
 	},
-	"latex-workshop.linting.chktex.exec.args": [
-		"-wall",
-		"-n22",
-		"-n30",
-		"-e16",
-		"-q",
-		"-n3",
-		"-n1",
-		"-n21",
-		"-n19",
-		"-n22"
-	],
-	"latex-workshop.linter.warning.ignore": [
-		"DuplicateLabels"
-	]
+	"latex-workshop.latex.toolchain": [
+  {
+    "command": "/Library/TeX/texbin/xelatex",
+    "args": ["-synctex=1", "-interaction=nonstopmode", "%DOC%"]
+  }
+]
+
+
+
 }

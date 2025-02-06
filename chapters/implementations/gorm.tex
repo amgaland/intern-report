@@ -1,0 +1,137 @@
+\section{GORM хэрэгжүүлэлт}
+
+Уг функцуудыг шаардлагын дагуу алхам алхмаар хэрэгжүүлсэнээр GORM-ийг ашиглах анхан шатны туршлагатай болох зорилготой байсан ба цаашид ажилласан төсөл дээр GORM-ийн дотоод логик, өгөгдлийн сангийн холболт, тайлбар хийх, өгөгдөл хадгалах болон шинэчлэх процессуудын ажиллагааг ойлгох, тодорхой хэмжээнд практик мэдлэгийг цуглуулж чадсан.
+
+Сурах ур чадвар: 
+\begin{itemize} 
+	\item GORM-ийг ашиглах чадвараа нэмэгдүүлэх 
+	\item Өгөгдлийн сантай харьцах үйлдлүүд (GET, POST, UPDATE, DELETE) болон тэдгээрийн процессийг ойлгох 
+	\item Хэрэглэгчийн логийг бүртгэх болон алдааг барих чадвар эзэмших 
+	\item CRUD үйлдлүүдийг GORM ашиглан бичих 
+	\item Горм-ийг ашиглахдаа data validation болон password hashing-ийн талаар мэдлэгтэй болох \end{itemize}
+
+Функцийн шаардлага: 
+\begin{itemize} 
+	\item GORM ашиглан хэрэглэгчийн мэдээллийг авах, нэмэх, засах, устгах 
+	\item Хэрэглэгчийн нэвтрэх ID-г шалгах функц бичих 
+	\item Алдааг бүртгэх болон лог хийх функц ашиглах 
+	\item GORM-ийн дотоод функцууд болон query үйлдлийг ойлгох 
+	\item Хэрэглэгчийн мэдээлэл устгах үед хамааралтай мэдээллийг устгах
+	\item Controller  давхаргыг зөв зохион байгуулах
+\end{itemize}
+	
+\subsection{User Management Functions}
+
+Энэхүү хэсэгт хэрэглэгчийн мэдээллийг удирдах хэд хэдэн функцийг оруулсан болно. Үүнд хэрэглэгчийн мэдээллийг авах, шинэчлэх, устгах, болон логины ID-г шалгах үйлдлүүд орно.
+
+\begin{lstlisting}[language=Go, caption=Get all users function, frame=single]
+func GetAllUsers(r *http.Request) ([]models.User, error) {
+	var users []models.User
+	if err := config.DB.Find(&users).Error; err != nil {
+		log.Error("Failed to fetch users", map[string]interface{}{"error": err.Error()}, r)
+		return nil, err
+	}
+	return users, nil
+}
+\end{lstlisting}
+
+Энэ функц нь бүх хэрэглэгчдийн мэдээллийг өгөгдлийн сангаас авч, ямар нэгэн алдаа гарсан тохиолдолд тухайн алдааг логлош болно.
+
+\begin{lstlisting}[language=Go, caption=Create user function, frame=single]
+func CreateUser(user models.User, r *http.Request) (models.User, error) {
+	existingUser := config.DB.Where("login_id = ?", user.LoginID).First(&models.User{})
+	if existingUser.RowsAffected > 0 {
+		return models.User{}, errors.New("user already exists")
+	}
+
+	hashedPassword, err := utils.HashPassword(user.Password)
+	if err != nil {
+		return models.User{}, err
+	}
+
+	user.Password = hashedPassword
+
+	if err := config.DB.Create(&user).Error; err != nil {
+		return models.User{}, err
+	}
+	return user, nil
+}
+\end{lstlisting}
+
+Шинэ хэрэглэгчийг үүсгэх үед, хэрэглэгчийн ID өмнө нь байгаа эсэхийг шалгаад, байсан бол алдаа буцаана. Мөн хэрэглэгчийн нууц үгийг хуулаад өгөгдлийн сан дээр хадгална.
+
+\begin{lstlisting}[language=Go, caption=Update user function, frame=single]
+func UpdateUser(id string, user models.User, r *http.Request) (models.User, error) {
+	hashedPassword, err := utils.HashPassword(user.Password)
+	if err != nil {
+		return models.User{}, err
+	}
+
+	user.Password = hashedPassword
+	if err := config.DB.Model(user).Where("id = ?", id).Updates(user).Error; err != nil {
+		return models.User{}, err
+	}
+	return user, nil
+}
+\end{lstlisting}
+
+Энэ функц нь хэрэглэгчийн мэдээллийг шинэчилж, нууц үгийг шинэчлэх шаардлагатай бол шинэчилнэ.
+
+\begin{lstlisting}[language=Go, caption=Delete user function, frame=single]
+func DeleteUser(id string, r *http.Request) error {
+	if err := config.DB.Where("user_id = ?", id).Delete(&models.UserRole{}).Error; err != nil {
+		return err
+	}
+
+	if err := config.DB.Where("id = ?", id).Delete(&models.User{}).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+\end{lstlisting}
+
+Хэрэглэгчийг устгах үед түүний хэрэглэгчийн үүрэг болон хэрэглэгчийн мэдээллийг устгана.
+
+\begin{lstlisting}[language=Go, caption=Get user by ID function, frame=single]
+func GetUserByID(id string, r *http.Request) (*models.User, error) {
+	log.Info("Fetching user by ID from the database", map[string]interface{}{"id": id}, r)
+
+	var user models.User
+
+	err := config.DB.Where("id = ?", id).First(&user).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Warn("User not found", map[string]interface{}{"id": id}, r)
+			return nil, nil
+		}
+		log.Error("Database query error", map[string]interface{}{"error": err.Error()}, r)
+		return nil, err
+	}
+
+	log.Info("User fetched successfully", map[string]interface{}{"id": id}, r)
+	return &user, nil
+}
+\end{lstlisting}
+
+Энэхүү функц нь хэрэглэгчийн ID-г ашиглан мэдээллийг өгөгдлийн сангаас авдаг. Хэрэв хэрэглэгч олдвол түүний мэдээллийг буцаана.
+
+\begin{lstlisting}[language=Go, caption=Check if login ID exists function, frame=single]
+func CheckLoginIDExists(loginID string, r *http.Request) (bool, error) {
+	var user models.User
+	result := config.DB.Where("login_id = ?", loginID).First(&user)
+
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
+		log.Error("Failed to check login_id", map[string]interface{}{"error": result.Error.Error()}, r)
+		return false, result.Error 
+	}
+
+	return true, nil 
+}
+\end{lstlisting}
+
+Энэ функц нь өгөгдлийн сан дээрх login ID-гийн байршлыг шалгадаг. Хэрэв байвал true, байхгүй бол false буцаана.
+\pagebreak

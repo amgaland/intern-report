@@ -70,46 +70,59 @@
     showtabs=false,                  
     tabsize=2
 }
- 
- %define Javascript language
-\lstdefinelanguage{JavaScript}{
-keywords={typeof, new, true, false, catch, function, return, null, catch, switch, var, if, in, while, do, else, case, break},
-keywordstyle=\color{blue}\bfseries,
-ndkeywords={class, export, boolean, throw, implements, import, this},
-ndkeywordstyle=\color{darkgray}\bfseries,
-identifierstyle=\color{black},
-sensitive=false,
-comment=[l]{//},
-morecomment=[s]{/*}{*/},
-commentstyle=\color{purple}\ttfamily,
-stringstyle=\color{red}\ttfamily,
-morestring=[b]',
-morestring=[b]"
-}
- 
-\lstset{
-language=JavaScript,
-extendedchars=true,
-basicstyle=\footnotesize\ttfamily,
-showstringspaces=false,
-showspaces=false,
-numbers=left,
-numberstyle=\footnotesize,
-numbersep=9pt,
-tabsize=2,
-breaklines=true,
-showtabs=false,
-captionpos=b
-}
- 
-\lstset{style=mystyle, label=DescriptiveLabel} 
 
+% Define TypeScript language for listings
+\lstdefinelanguage{TypeScript}{
+    keywords={as, abstract, any, argument, boolean, break, case, class, const, constructor, continue, debugger, default, delete, do, else, enum, export, extends, false, finally, for, from, function, get, if, implements, import, in, instanceof, interface, let, module, namespace, new, null, number, object, package, private, protected, public, readonly, return, static, string, super, switch, symbol, throw, true, try, type, undefined, var, void, while},
+    keywordstyle=\color{blue}\bfseries,
+    ndkeywords={boolean, throws, try, void, with, yield, this, import},
+    ndkeywordstyle=\color{darkgray}\bfseries,
+    identifierstyle=\color{black},
+    sensitive=false,
+    comment=[l]{//},
+    morecomment=[s]{/*}{*/},
+    commentstyle=\color{purple}\ttfamily,
+    stringstyle=\color{red}\ttfamily,
+    morestring=[b]',
+    morestring=[b]"
+}
+
+% Define Go language for listings
+\lstdefinelanguage{Go}{
+    keywords={break, case, chan, const, continue, default, defer, else, fallthrough, for, func, go, goto, if, import, interface, map, package, range, return, select, struct, switch, type, var},
+    keywordstyle=\color{blue}\bfseries,
+    ndkeywords={interface, select, go, map},
+    ndkeywordstyle=\color{darkgray}\bfseries,
+    identifierstyle=\color{black},
+    sensitive=true,
+    comment=[l]{//},
+    morecomment=[s]{/*}{*/},
+    commentstyle=\color{purple}\ttfamily,
+    stringstyle=\color{red}\ttfamily,
+    morestring=[b]',
+    morestring=[b]"
+}
+
+\lstset{
+    extendedchars=true,
+    basicstyle=\footnotesize\ttfamily,
+    showstringspaces=false,
+    showspaces=false,
+    numbers=left,
+    numberstyle=\footnotesize,
+    numbersep=9pt,
+    tabsize=2,
+    breaklines=true,
+    showtabs=false,
+    captionpos=b
+}
+
+\lstset{style=mystyle, label=DescriptiveLabel} 
 
 \let\oldabs\abs
 \def\abs{\@ifstar{\oldabs}{\oldabs*}}
 \makenomenclature
 \begin{document}
-
 
 %----------------------------------------------------------------------------------------
 %   Өөрийн мэдээллээ оруулах хэсэг
@@ -144,8 +157,6 @@ captionpos=b
 \cityName{Улаанбаатар}
 % Хэвлэгдсэн огноо
 \gradyear{2025 оны 01сар}
-
-
 
 %----------------------------------------------------------------------------------------
 %   Доорх хэсгийг өөрчлөх шаардлагагүй
