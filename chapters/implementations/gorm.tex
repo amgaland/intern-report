@@ -1,6 +1,6 @@
 \section{GORM хэрэгжүүлэлт}
 
-Уг функцуудыг шаардлагын дагуу алхам алхмаар хэрэгжүүлсэнээр GORM-ийг ашиглах анхан шатны туршлагатай болох зорилготой байсан ба цаашид ажилласан төсөл дээр GORM-ийн дотоод логик, өгөгдлийн сангийн холболт, тайлбар хийх, өгөгдөл хадгалах болон шинэчлэх процессуудын ажиллагааг ойлгох, тодорхой хэмжээнд практик мэдлэгийг цуглуулж чадсан.
+Энэ хэсэгт GORM-ийг ашиглах анхан шатны туршлагатай болох зорилготой байсан ба цаашид ажилласан төсөл дээр GORM-ийн дотоод логик, өгөгдлийн сангийн холболт, тайлбар хийх, өгөгдөл хадгалах болон шинэчлэх процессуудын ажиллагааг ойлгох, тодорхой хэмжээнд практик мэдлэгийг цуглуулж чадсан.
 
 Сурах ур чадвар: 
 \begin{itemize} 
@@ -20,11 +20,12 @@
 	\item Controller  давхаргыг зөв зохион байгуулах
 \end{itemize}
 	
-\subsection{User Management Functions}
+\subsection{User Service}
 
 Энэхүү хэсэгт хэрэглэгчийн мэдээллийг удирдах хэд хэдэн функцийг оруулсан болно. Үүнд хэрэглэгчийн мэдээллийг авах, шинэчлэх, устгах, болон логины ID-г шалгах үйлдлүүд орно.
 
-\begin{lstlisting}[language=Go, caption=Get all users function, frame=single]
+Энэ функц нь бүх хэрэглэгчдийн мэдээллийг өгөгдлийн сангаас авч, ямар нэгэн алдаа гарсан тохиолдолд тухайн алдааг лог болгон харуулна.
+\begin{lstlisting}[language=Go, caption=Get All Users Service, frame=single]
 func GetAllUsers(r *http.Request) ([]models.User, error) {
 	var users []models.User
 	if err := config.DB.Find(&users).Error; err != nil {
@@ -35,9 +36,8 @@ func GetAllUsers(r *http.Request) ([]models.User, error) {
 }
 \end{lstlisting}
 
-Энэ функц нь бүх хэрэглэгчдийн мэдээллийг өгөгдлийн сангаас авч, ямар нэгэн алдаа гарсан тохиолдолд тухайн алдааг логлош болно.
-
-\begin{lstlisting}[language=Go, caption=Create user function, frame=single]
+Шинэ хэрэглэгчийг үүсгэх үед, хэрэглэгчийн ID өмнө нь байгаа эсэхийг шалгаад, байвал алдаа буцаана. Мөн хэрэглэгчийн нууц үгийг хуулаад өгөгдлийн сан дээр хадгална.
+\begin{lstlisting}[language=Go, caption=Create User Service, frame=single]
 func CreateUser(user models.User, r *http.Request) (models.User, error) {
 	existingUser := config.DB.Where("login_id = ?", user.LoginID).First(&models.User{})
 	if existingUser.RowsAffected > 0 {
@@ -58,9 +58,8 @@ func CreateUser(user models.User, r *http.Request) (models.User, error) {
 }
 \end{lstlisting}
 
-Шинэ хэрэглэгчийг үүсгэх үед, хэрэглэгчийн ID өмнө нь байгаа эсэхийг шалгаад, байсан бол алдаа буцаана. Мөн хэрэглэгчийн нууц үгийг хуулаад өгөгдлийн сан дээр хадгална.
-
-\begin{lstlisting}[language=Go, caption=Update user function, frame=single]
+Энэ функц нь хэрэглэгчийн мэдээллийг шинэчилж, нууц үгийг шинэчлэх шаардлагатай бол шинэчилнэ.
+\begin{lstlisting}[language=Go, caption=Update User Service, frame=single]
 func UpdateUser(id string, user models.User, r *http.Request) (models.User, error) {
 	hashedPassword, err := utils.HashPassword(user.Password)
 	if err != nil {
@@ -75,9 +74,8 @@ func UpdateUser(id string, user models.User, r *http.Request) (models.User, erro
 }
 \end{lstlisting}
 
-Энэ функц нь хэрэглэгчийн мэдээллийг шинэчилж, нууц үгийг шинэчлэх шаардлагатай бол шинэчилнэ.
-
-\begin{lstlisting}[language=Go, caption=Delete user function, frame=single]
+Хэрэглэгчийг устгах үед түүний үүрэг болон хэрэглэгчийн мэдээллийг устгана.
+\begin{lstlisting}[language=Go, caption=Delete User Service, frame=single]
 func DeleteUser(id string, r *http.Request) error {
 	if err := config.DB.Where("user_id = ?", id).Delete(&models.UserRole{}).Error; err != nil {
 		return err
@@ -91,9 +89,8 @@ func DeleteUser(id string, r *http.Request) error {
 }
 \end{lstlisting}
 
-Хэрэглэгчийг устгах үед түүний хэрэглэгчийн үүрэг болон хэрэглэгчийн мэдээллийг устгана.
-
-\begin{lstlisting}[language=Go, caption=Get user by ID function, frame=single]
+Энэхүү функц нь ID-г ашиглан мэдээллийг өгөгдлийн сангаас авна. Хэрэв хэрэглэгч олдвол түүний мэдээллийг буцаана.
+\begin{lstlisting}[language=Go, caption=Get User By ID Service, frame=single]
 func GetUserByID(id string, r *http.Request) (*models.User, error) {
 	log.Info("Fetching user by ID from the database", map[string]interface{}{"id": id}, r)
 
@@ -114,9 +111,8 @@ func GetUserByID(id string, r *http.Request) (*models.User, error) {
 }
 \end{lstlisting}
 
-Энэхүү функц нь хэрэглэгчийн ID-г ашиглан мэдээллийг өгөгдлийн сангаас авдаг. Хэрэв хэрэглэгч олдвол түүний мэдээллийг буцаана.
-
-\begin{lstlisting}[language=Go, caption=Check if login ID exists function, frame=single]
+Энэ функц нь өгөгдлийн сангаас login ID-гийн байгаа эсэхийг шалгадаг. Хэрэв байвал true, байхгүй бол false буцаана.
+\begin{lstlisting}[language=Go, caption=Check if login ID exists Service, frame=single]
 func CheckLoginIDExists(loginID string, r *http.Request) (bool, error) {
 	var user models.User
 	result := config.DB.Where("login_id = ?", loginID).First(&user)
@@ -132,6 +128,4 @@ func CheckLoginIDExists(loginID string, r *http.Request) (bool, error) {
 	return true, nil 
 }
 \end{lstlisting}
-
-Энэ функц нь өгөгдлийн сан дээрх login ID-гийн байршлыг шалгадаг. Хэрэв байвал true, байхгүй бол false буцаана.
 \pagebreak

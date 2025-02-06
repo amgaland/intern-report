@@ -1,5 +1,7 @@
 \section{Back-End хэрэгжүүлэлт}
-Энэ код нь Gin framework ашиглан хэрэглэгчийн бүртгэл, шинэчлэл, устгал, шалгалт хийх RESTful API-г зохион байгуулсан бөгөөд лог бичлэг болон аль болох тодорхой мэдээлэл авах боломжтой Controller бичих зорилготой. 
+Энэ хэсэгт хэрэглэгчийн мэдээлэлтэй холбоотой CRUD үйлдлүүдийг GORM ашиглан хийнэ.
+CRUD(create, Read, Update, Delete) үйлдлүүд нь хэрэглэгчийн мэдээллийг үүсгэх, унших,
+шинэчлэх, устгах боломжийг олгодог.
 
 Сурах ур чадвар:
 \begin{itemize}
@@ -28,9 +30,6 @@
 \end{itemize}
 \pagebreak
 
-\subsection{Controller}
-Энэ хэсэгт хэрэглэгчийн мэдээлэлтэй холбоотой CRUD үйлдлүүдийг GORM ашиглан хийнэ. CRUD(create, Read, Update, Delete) үйлдлүүд нь хэрэглэгчийн мэдээллийг үүсгэх, унших, шинэчлэх, устгах боломжийг олгодог.
-
 \subsection{GetAllUsers}
 Хэрэглэгчийн мэдээллийг Postgres өгөгдлийн сангаас авах API-ийг хэрэгжүүлэх хэсэг. GetAllUsers функц нь өгөгдлийн сангаас бүх хэрэглэгчийн мэдээллийг авахад зориулагдсан бөгөөд хэрэглэгчийн жагсаалтыг буцаадаг.
 
@@ -58,7 +57,7 @@
 \end{lstlisting}
 
 \subsection{CreateUser}
-CreateUser функц нь хэрэглэгчийн мэдээллийг JSON хэлбэрээр хүлээн авч, models.User объектоор хувиргадаг. Ингэснээр хэрэглэгчийн мэдээллийг сервер рүү илгээх боломжтой болно.
+CreateUser функц нь хэрэглэгчийн мэдээллийг JSON хэлбэрээр хүлээн авч, models.User объект болгон хувиргадаг. Ингэснээр хэрэглэгчийн мэдээллийг сервер рүү илгээх боломжтой болно.
 \begin{lstlisting}[language=Go, caption=CreatUser Controller, frame=single]
 	func GetAllUsers(r *http.Request) ([]models.User, error) {
 		var users []models.User
@@ -114,7 +113,7 @@ DeleteUser функц нь хэрэглэгчийн ID-ийг URL парамет
 \end{lstlisting}
 
 \subsection{CheckLoginIDExists}
-CheckLoginIDExists функц нь хэрэглэгчийн login id-ийг URL-ийн query параметрээс авч, энэ login id-ийн оршин байгаа эсэхийг шалгадаг.
+CheckLoginIDExists функц нь хэрэглэгчийн login id-ийг URL-ийн query параметрээс авч, өгөгдлийн санд login id-ийн оршин байгаа эсэхийг шалгадаг.
 \begin{lstlisting}[language=Go, caption=CheckLoginIDExists Controller, frame=single]
 func CheckLoginIDExists(c *gin.Context) {
 	loginID := c.Query("login_id")
